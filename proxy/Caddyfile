@@ -1,0 +1,36 @@
+# Proxy reverso do projeto "Minha Nuvem"
+#
+# LOCAL: APP_DOMAIN=localhost e "tls internal" gera um certificado próprio.
+#        O navegador vai avisar que não confia — é esperado, aceite a exceção.
+# NUVEM: troque APP_DOMAIN pelo seu domínio real e comente a linha "tls internal";
+#        o Caddy emite e renova o certificado sozinho (Let's Encrypt).
+
+{$APP_DOMAIN:localhost} {
+
+	tls internal
+
+	encode zstd gzip
+
+	# Limite de tamanho do upload — a primeira barreira da cota (RF12).
+	# A segunda barreira é na SUA aplicação: nunca confie só nesta.
+	request_body {
+		max_size {$MAX_UPLOAD:2GB}
+	}
+
+	# Console de administração do MinIO — útil para inspecionar os objetos
+	# durante o desenvolvimento. RETIRE OU PROTEJA antes de expor na internet.
+	handle_path /console/* {
+		reverse_proxy minio:9001
+	}
+
+	# Todo o resto vai para a sua aplicação.
+	# Com várias réplicas (--scale app=3), o Caddy distribui sozinho:
+	# é assim que você demonstra a elasticidade (característica 4).
+	reverse_proxy app:8000 {
+		header_up X-Real-IP {remote_host}
+	}
+
+	log {
+		output file /data/acesso.log
+	}
+}

@@ -1,0 +1,135 @@
+# Kit inicial — Projeto "Minha Nuvem"
+# Cloud – Computação em Nuvem · IFMS Campus Nova Andradina
+#
+# Este arquivo entrega a INFRAESTRUTURA pronta: proxy com TLS, armazenamento
+# de objetos e banco de dados. O serviço "app" é a SUA aplicação — é ela que
+# você vai construir ao longo do semestre.
+#
+#   docker compose up -d db minio     # só a infraestrutura, para começar
+#   docker compose up -d              # tudo, quando a sua aplicação existir
+#   docker compose ps                 # conferir a saúde dos serviços
+#   docker compose logs -f minio      # acompanhar um serviço
+#   docker compose up -d --scale app=3   # elasticidade (característica 4)
+#   docker compose down               # derruba SEM apagar os volumes
+#   docker compose down -v            # derruba E APAGA OS DADOS — cuidado
+
+name: minha-nuvem
+
+services:
+
+  # ------------------------------------------------------------------
+  # PROXY REVERSO — porta de entrada única, TLS e limite de upload
+  # ------------------------------------------------------------------
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:-localhost}
+      MAX_UPLOAD: ${MAX_UPLOAD:-2GB}
+    depends_on:
+      - app
+    networks: [frente, fundo]
+
+  # ------------------------------------------------------------------
+  # APLICAÇÃO — SUA. Construa em ./app com um Dockerfile.
+  # Deve ouvir na porta 8000 e ser SEM ESTADO (RNF08):
+  # nada de gravar arquivo ou sessão no disco do container.
+  # ------------------------------------------------------------------
+  app:
+    build: ./app
+    restart: unless-stopped
+    environment:
+      # Banco de metadados
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      # Armazenamento de objetos — as MESMAS variáveis funcionam na nuvem real,
+      # bastando trocar o endpoint pelo do provedor. É o antídoto ao lock-in.
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      S3_BUCKET: ${S3_BUCKET:-arquivos}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      # Aplicação
+      APP_SECRET: ${APP_SECRET}
+      COTA_PADRAO_MB: ${COTA_PADRAO_MB:-1024}
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    expose:
+      - "8000"
+    networks: [frente, fundo]
+
+  # ------------------------------------------------------------------
+  # ARMAZENAMENTO DE OBJETOS — compatível com a API S3
+  # Console de administração em https://SEU_DOMINIO/console/
+  # ------------------------------------------------------------------
+  minio:
+    image: quay.io/minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      # Se a sua versão da imagem não trouxer o "mc", troque por:
+      #   test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    expose:
+      - "9000"
+      - "9001"
+    networks: [frente, fundo]
+
+  # ------------------------------------------------------------------
+  # BANCO DE METADADOS — usuários, arquivos, cotas, auditoria
+  # NUNCA guarde o conteúdo do arquivo aqui: só o metadado.
+  # ------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    networks: [fundo]
+
+# --------------------------------------------------------------------
+# VOLUMES — é aqui que o dado sobrevive ao "docker compose down" (RNF05).
+# Faça o backup DESTES volumes (F5 do projeto).
+# --------------------------------------------------------------------
+volumes:
+  minio_data:
+  db_data:
+  caddy_data:
+  caddy_config:
+
+# --------------------------------------------------------------------
+# REDES — o banco fica só na rede interna, sem porta publicada no host.
+# Menor privilégio também vale para rede.
+# --------------------------------------------------------------------
+networks:
+  frente:
+  fundo:
+    internal: false

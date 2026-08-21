@@ -1,0 +1,24 @@
+# NUNCA versione segredo (RNF04)
+.env
+*.pem
+*.key
+*.crt
+
+# Dados locais
+dados/
+*.sqlite3
+*.db
+
+# Dependências e build
+node_modules/
+__pycache__/
+*.pyc
+venv/
+.venv/
+dist/
+build/
+
+# Editor e SO
+.vscode/
+.idea/
+.DS_Store

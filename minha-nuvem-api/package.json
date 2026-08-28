@@ -1,0 +1,23 @@
+{
+  "name": "minha-nuvem-api",
+  "version": "1.0.0",
+  "description": "api do projeto minha-nuvem para armazenamento em nuvem ",
+  "license": "ISC",
+  "author": "flavia & jamili",
+  "type": "commonjs",
+  "main": "index.ts",
+  "scripts": {
+  "dev": "tsx watch src/index.ts",
+  "build": "tsc",
+  "start": "node dist/index.js"
+},
+  "dependencies": {
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.4.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2"
+  }
+}

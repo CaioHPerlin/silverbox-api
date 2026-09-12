@@ -1,22 +1,11 @@
-# Esta pasta é sua
+## Versões do ambiente
 
-O kit inicial entrega a infraestrutura pronta (proxy, armazenamento de objetos
-e banco). **A aplicação é o seu trabalho** — é ela que vale nota.
+O projeto usa o **Node.js 24 LTS**. O `package.json` aceita somente versões
+da linha 24 (`>=24 <25`) e o npm da linha 11 (`>=11 <12`). As dependências
+também estão com versões exatas, sem os prefixos `^` ou `~`, e o
+`package-lock.json` deve ser versionado para tornar a instalação reproduzível.
 
-Para o `docker compose up -d` funcionar por inteiro, crie aqui:
+Antes de começar, confira as versões instaladas:
 
-1. **`Dockerfile`** — que construa a sua aplicação e a faça ouvir na **porta 8000**;
-2. o código, na linguagem e no framework que você escolher.
-
-Enquanto a aplicação não existir, suba só a infraestrutura:
-
-    docker compose up -d db minio
-
-Regras que a aplicação precisa respeitar:
-
-- **Sem estado** (RNF08): nada de gravar arquivo, sessão ou cache no disco do
-  container. Arquivo vai para o MinIO; metadado vai para o PostgreSQL.
-- Ler toda a configuração das **variáveis de ambiente** já definidas no
-  `docker-compose.yml` — nunca com valores fixos no código.
-- Aplicar a **cota também na API** (RF12), não só na interface web.
-- Nunca confiar no nome de arquivo enviado pelo usuário: sanitize antes de usar.
+    node --version
+    npm --version

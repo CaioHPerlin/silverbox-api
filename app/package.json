@@ -4,7 +4,7 @@
   "private": true,
   "description": "REST API for the Silverbox cloud storage project",
   "license": "ISC",
-  "author": "TADS 6 - 2026/2",
+  "author": "TADS 6 (2026/2)",
   "type": "module",
   "packageManager": "npm@11.19.0",
   "engines": {

@@ -18,6 +18,12 @@ venv/
 dist/
 build/
 
+# O projeto utiliza npm; lockfiles de outros gerenciadores não devem ser versionados
+pnpm-lock.yaml
+yarn.lock
+bun.lock
+bun.lockb
+
 # Editor e SO
 .vscode/
 .idea/

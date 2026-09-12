@@ -1,9 +1,9 @@
 {
-  "name": "minha-nuvem-api",
+  "name": "silverbox-api",
   "version": "1.0.0",
-  "description": "api do projeto minha-nuvem para armazenamento em nuvem ",
+  "description": "api do projeto silverbox para armazenamento em nuvem ",
   "license": "ISC",
-  "author": "flavia & jamili",
+  "author": "TADS 6 - 2026/2",
   "type": "commonjs",
   "main": "index.ts",
   "scripts": {

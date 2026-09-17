@@ -24,21 +24,6 @@ const envSchema = z.object({
       (v) => v.startsWith("postgres://") || v.startsWith("postgresql://"),
       "DATABASE_URL must start with postgres:// or postgresql://",
     ),
-
-  S3_ENDPOINT: z
-    .string()
-    .min(1, "S3_ENDPOINT is required")
-    .refine(
-      (v) => v.startsWith("http://") || v.startsWith("https://"),
-      "S3_ENDPOINT must be an http:// or https:// URL",
-    ),
-  S3_ACCESS_KEY: z.string().min(1, "S3_ACCESS_KEY is required"),
-  S3_SECRET_KEY: z.string().min(1, "S3_SECRET_KEY is required"),
-  S3_BUCKET: z.string().min(1, "S3_BUCKET is required"),
-  S3_REGION: z.string().min(1, "S3_REGION is required"),
-
-  APP_SECRET: z.string().min(32, "APP_SECRET must be at least 32 characters long"),
-  COTA_PADRAO_MB: z.coerce.number().int().positive().default(1024),
 });
 
 function loadEnv() {

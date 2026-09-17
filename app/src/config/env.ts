@@ -1,19 +1,12 @@
 import { z } from "zod";
+import { existsSync } from "node:fs";
 
-try {
+if (existsSync(".env")) {
   process.loadEnvFile();
-} catch (error) {
-  const isFileNotFound = (error as NodeJS.ErrnoException).code === "ENOENT";
-  if (!isFileNotFound) {
-    throw error;
-  }
 }
 
 const envSchema = z.object({
-
-  NODE_ENV: z
-    .enum(["development", "production"])
-    .default("development"),
+  NODE_ENV: z.enum(["development", "production"]).default("development"),
 
   PORT: z.coerce.number().int().positive().default(8000),
 
@@ -21,8 +14,8 @@ const envSchema = z.object({
     .string()
     .min(1, "DATABASE_URL is required")
     .refine(
-      (v) => v.startsWith("postgres://") || v.startsWith("postgresql://"),
-      "DATABASE_URL must start with postgres:// or postgresql://",
+      (v) => v.startsWith("postgresql://"),
+      "DATABASE_URL must start with postgresql://",
     ),
 });
 

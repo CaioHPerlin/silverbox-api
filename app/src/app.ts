@@ -1,11 +1,12 @@
 import express, { type Application } from "express";
-import { attachLogger } from "./middleware/loggerMiddleware.js";
+import { loggerMiddleware } from "./middleware/logger.js";
 
 export function createApp(): Application {
   const app = express();
 
   // Middleware
-  attachLogger(app);
+  app.set("trust proxy", 1);
+  app.use(loggerMiddleware);
   app.disable("x-powered-by");
   app.use(express.json());
 

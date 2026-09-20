@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { pinoHttp, stdSerializers, type Options } from "pino-http";
+import { env } from "../config/env.js";
 
-// @TODO: Read LOG_LEVEL from the validated environment config.
-const logLevel = process.env.LOG_LEVEL ?? "info";
+
+const logLevel = env.LOG_LEVEL;
 
 const options: Options = {
   level: logLevel,

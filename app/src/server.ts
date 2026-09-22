@@ -21,7 +21,6 @@ async function bootstrap(): Promise<void> {
       void db.close().finally(() => process.exit(0));
     });
   }
-
   process.once("SIGTERM", () => shutdown("SIGTERM"));
   process.once("SIGINT", () => shutdown("SIGINT"));
 }

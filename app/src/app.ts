@@ -1,7 +1,7 @@
 import express, { type Application } from "express";
 import { loggerMiddleware } from "./middleware/logger.js";
 import swaggerUi from 'swagger-ui-express';
-import { swaggerSpec } from './config/swagger';
+import { swaggerSpec } from './config/swagger.js';
 
 export function createApp(): Application {
   const app = express();

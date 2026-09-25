@@ -1,9 +1,6 @@
 import { createApp } from "./app.js";
-
-// @TODO: Load environment variables from .env file
-const env = {
-  PORT: 3000,
-};
+import { env } from "./config/env.js";
+import { db } from "./prisma/db.js";
 
 async function bootstrap(): Promise<void> {
   const app = createApp();
@@ -21,7 +18,7 @@ async function bootstrap(): Promise<void> {
         process.exit(1);
       }
 
-      process.exit(0);
+      void db.close().finally(() => process.exit(0));
     });
   }
   process.once("SIGTERM", () => shutdown("SIGTERM"));

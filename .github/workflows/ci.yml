@@ -7,8 +7,26 @@ on:
     branches: [main]
 
 jobs:
+  autoformat:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app # Garante que o npm ci rode na pasta correta
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: |
+          npm ci
+          npx prettier . --write
+      - uses: autofix-ci/action@v1
+        with:
+          commit-message: "Apply Prettier format"
+
   build-and-test:
     name: Build & Test
+    needs: autoformat
     runs-on: ubuntu-latest
 
     defaults:
@@ -24,10 +42,13 @@ jobs:
         with:
           node-version: "24"
           cache: "npm"
-          cache-dependency-path: app/package-lock.json
+          cache-dependency-path: "${{ github.workspace }}/app/package-lock.json"
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Approve Allow-Scripts
+        run: npx @lavamoat/allow-scripts auto
 
       - name: Type check
         run: npm run typecheck

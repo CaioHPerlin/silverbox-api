@@ -1,5 +1,6 @@
 import express, { type Application } from "express";
 import { loggerMiddleware } from "./middleware/logger.js";
+import { errorHandler, notFoundHandler } from "./middleware/error-handler.js";
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.js';
 
@@ -26,6 +27,10 @@ export function createApp(): Application {
   app.get('/docs.json', (_req, res) => {
     res.json(swaggerSpec);
   });
+
+  // Error handling (sempre por último)
+  app.use(notFoundHandler);
+  app.use(errorHandler);
 
   return app;
 }

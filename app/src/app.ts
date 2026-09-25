@@ -1,7 +1,7 @@
 import express, { type Application } from "express";
 import { loggerMiddleware } from "./middleware/logger.js";
-import swaggerUi from 'swagger-ui-express';
-import { swaggerSpec } from './config/swagger.js';
+import swaggerUi from "swagger-ui-express";
+import { swaggerSpec } from "./config/swagger.js";
 
 export function createApp(): Application {
   const app = express();
@@ -12,18 +12,15 @@ export function createApp(): Application {
   app.disable("x-powered-by");
   app.use(express.json());
 
-  app.use(
-  '/docs',
-  swaggerUi.serve,
-  swaggerUi.setup(swaggerSpec)
- );
- 
   // Routes
+
+  app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
   app.get("/", (_, res) => {
     res.json({ message: "Hello, World" });
   });
 
-  app.get('/docs.json', (_req, res) => {
+  app.get("/docs.json", (_req, res) => {
     res.json(swaggerSpec);
   });
 

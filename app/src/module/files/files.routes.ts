@@ -1,10 +1,10 @@
-import { Router } from 'express';
+import { Router } from 'express'
 
-import { filesController } from './files.controller';
-import { authMiddleware } from '../../middlewares/auth.middleware';
-import { upload } from '../../middlewares/upload.middleware';
+import { filesController } from './files.controller'
+import { authMiddleware } from '../../middlewares/auth.middleware'
+import { upload } from '../../middlewares/upload.middleware'
 
-export const filesRouter = Router();
+export const filesRouter = Router()
 
 /**
  * @openapi
@@ -84,9 +84,4 @@ export const filesRouter = Router();
  *                 value:
  *                   error: Arquivo muito grande
  */
-filesRouter.post(
-  '/upload',
-  authMiddleware,
-  upload.single('file'),
-  filesController.upload,
-);
+filesRouter.post('/upload', authMiddleware, upload.single('file'), filesController.upload)

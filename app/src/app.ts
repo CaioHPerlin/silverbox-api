@@ -1,28 +1,28 @@
-import express, { type Application } from "express";
-import { loggerMiddleware } from "./middleware/logger.js";
-import swaggerUi from "swagger-ui-express";
-import { swaggerSpec } from "./config/swagger.js";
+import express, { type Application } from 'express';
+import { loggerMiddleware } from './middleware/logger.js';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './config/swagger.js';
 
 export function createApp(): Application {
-  const app = express();
+	const app = express();
 
-  // Middleware
-  app.set("trust proxy", 1);
-  app.use(loggerMiddleware);
-  app.disable("x-powered-by");
-  app.use(express.json());
+	// Middleware
+	app.set('trust proxy', 1);
+	app.use(loggerMiddleware);
+	app.disable('x-powered-by');
+	app.use(express.json());
 
-  // Routes
+	// Routes
 
-  app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+	app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-  app.get("/", (_, res) => {
-    res.json({ message: "Hello, World" });
-  });
+	app.get('/', (_, res) => {
+		res.json({ message: 'Hello, World' });
+	});
 
-  app.get("/docs.json", (_req, res) => {
-    res.json(swaggerSpec);
-  });
+	app.get('/docs.json', (_req, res) => {
+		res.json(swaggerSpec);
+	});
 
-  return app;
+	return app;
 }

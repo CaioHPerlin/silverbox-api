@@ -34,8 +34,9 @@ import type {
 } from '@prisma/orm-postgres/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'0c0734babd6eeb868fee1f281ca96963022475611560e9f170f465daa35f8599'>;
-export type ExecutionHash = ExecutionHashBase<string>;
+  StorageHashBase<'c037c3bdfd95272541cb6fc895a6c273e0f14c444745ff424d72bea37b98168b'>;
+export type ExecutionHash =
+  ExecutionHashBase<'78b8bb0104f5b27b8b734152cdb0bf1607052d9342d120b261186bd99425c7f3'>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
 
@@ -239,15 +240,520 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
     : CodecTypes[CodecId]['json']
   : Encoded;
 
-export type FieldOutputTypes = { readonly public: Record<string, never> };
-export type FieldInputTypes = { readonly public: Record<string, never> };
-export type StorageColumnTypes = { readonly public: {} };
-export type StorageColumnInputTypes = { readonly public: {} };
+export type FieldOutputTypes = {
+  readonly silverbox_api: {
+    readonly Account: {
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly userId: CodecTypes['pg/int4@1']['output'];
+      readonly accountId: CodecTypes['sql/varchar@1']['output'];
+      readonly providerId: CodecTypes['sql/varchar@1']['output'];
+      readonly password: Varchar<255> | null;
+      readonly accessToken: CodecTypes['sql/varchar@1']['output'] | null;
+      readonly refreshToken: CodecTypes['sql/varchar@1']['output'] | null;
+      readonly idToken: CodecTypes['sql/varchar@1']['output'] | null;
+      readonly accessTokenExpiresAt: CodecTypes['pg/timestamp-temporal@1']['output'] | null;
+      readonly refreshTokenExpiresAt: CodecTypes['pg/timestamp-temporal@1']['output'] | null;
+      readonly createdAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly updatedAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    };
+    readonly AuditLog: {
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly userId: CodecTypes['pg/int4@1']['output'];
+      readonly action: CodecTypes['sql/varchar@1']['output'];
+      readonly ipAddress: CodecTypes['sql/varchar@1']['output'];
+      readonly details: CodecTypes['sql/varchar@1']['output'] | null;
+      readonly createdAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    };
+    readonly File: {
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly userId: CodecTypes['pg/int4@1']['output'];
+      readonly folderId: CodecTypes['pg/int4@1']['output'];
+      readonly originalName: CodecTypes['sql/varchar@1']['output'];
+      readonly storageKey: CodecTypes['sql/varchar@1']['output'];
+      readonly sizeBytes: CodecTypes['pg/int8@1']['output'];
+      readonly mimeType: CodecTypes['sql/varchar@1']['output'];
+      readonly checksum: CodecTypes['sql/varchar@1']['output'];
+      readonly isDeleted: CodecTypes['pg/bool@1']['output'];
+      readonly deletedAt: CodecTypes['pg/timestamp-temporal@1']['output'] | null;
+      readonly createdAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly updatedAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    };
+    readonly FileVersion: {
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly fileId: CodecTypes['pg/int4@1']['output'];
+      readonly storageKey: CodecTypes['sql/varchar@1']['output'];
+      readonly versionNumber: CodecTypes['pg/int4@1']['output'];
+      readonly sizeBytes: CodecTypes['pg/int8@1']['output'];
+      readonly checksum: CodecTypes['sql/varchar@1']['output'];
+      readonly createdAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    };
+    readonly Folder: {
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly userId: CodecTypes['pg/int4@1']['output'];
+      readonly parentFolderId: CodecTypes['pg/int4@1']['output'] | null;
+      readonly name: CodecTypes['sql/varchar@1']['output'];
+      readonly createdAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly updatedAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    };
+    readonly Session: {
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly userId: CodecTypes['pg/int4@1']['output'];
+      readonly token: CodecTypes['sql/varchar@1']['output'];
+      readonly expiresAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly ipAddress: CodecTypes['sql/varchar@1']['output'] | null;
+      readonly userAgent: CodecTypes['sql/varchar@1']['output'] | null;
+      readonly createdAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly updatedAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    };
+    readonly SharedLink: {
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly fileId: CodecTypes['pg/int4@1']['output'];
+      readonly userId: CodecTypes['pg/int4@1']['output'];
+      readonly token: CodecTypes['sql/varchar@1']['output'];
+      readonly expiresAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly createdAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    };
+    readonly User: {
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly name: Varchar<155>;
+      readonly email: Varchar<155> | null;
+      readonly emailVerified: CodecTypes['pg/bool@1']['output'];
+      readonly image: CodecTypes['sql/varchar@1']['output'] | null;
+      readonly userRole: CodecTypes['sql/varchar@1']['output'];
+      readonly quotaLimitBytes: CodecTypes['pg/int8@1']['output'];
+      readonly createdAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly updatedAt: CodecTypes['pg/timestamp-temporal@1']['output'] | null;
+    };
+    readonly Verification: {
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly identifier: CodecTypes['sql/varchar@1']['output'];
+      readonly value: CodecTypes['sql/varchar@1']['output'];
+      readonly expiresAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly createdAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly updatedAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    };
+  };
+};
+export type FieldInputTypes = {
+  readonly silverbox_api: {
+    readonly Account: {
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly userId: CodecTypes['pg/int4@1']['input'];
+      readonly accountId: CodecTypes['sql/varchar@1']['input'];
+      readonly providerId: CodecTypes['sql/varchar@1']['input'];
+      readonly password: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly accessToken: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly refreshToken: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly idToken: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly accessTokenExpiresAt: CodecTypes['pg/timestamp-temporal@1']['input'] | null;
+      readonly refreshTokenExpiresAt: CodecTypes['pg/timestamp-temporal@1']['input'] | null;
+      readonly createdAt: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly updatedAt: CodecTypes['pg/timestamp-temporal@1']['input'];
+    };
+    readonly AuditLog: {
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly userId: CodecTypes['pg/int4@1']['input'];
+      readonly action: CodecTypes['sql/varchar@1']['input'];
+      readonly ipAddress: CodecTypes['sql/varchar@1']['input'];
+      readonly details: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly createdAt: CodecTypes['pg/timestamp-temporal@1']['input'];
+    };
+    readonly File: {
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly userId: CodecTypes['pg/int4@1']['input'];
+      readonly folderId: CodecTypes['pg/int4@1']['input'];
+      readonly originalName: CodecTypes['sql/varchar@1']['input'];
+      readonly storageKey: CodecTypes['sql/varchar@1']['input'];
+      readonly sizeBytes: CodecTypes['pg/int8@1']['input'];
+      readonly mimeType: CodecTypes['sql/varchar@1']['input'];
+      readonly checksum: CodecTypes['sql/varchar@1']['input'];
+      readonly isDeleted: CodecTypes['pg/bool@1']['input'];
+      readonly deletedAt: CodecTypes['pg/timestamp-temporal@1']['input'] | null;
+      readonly createdAt: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly updatedAt: CodecTypes['pg/timestamp-temporal@1']['input'];
+    };
+    readonly FileVersion: {
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly fileId: CodecTypes['pg/int4@1']['input'];
+      readonly storageKey: CodecTypes['sql/varchar@1']['input'];
+      readonly versionNumber: CodecTypes['pg/int4@1']['input'];
+      readonly sizeBytes: CodecTypes['pg/int8@1']['input'];
+      readonly checksum: CodecTypes['sql/varchar@1']['input'];
+      readonly createdAt: CodecTypes['pg/timestamp-temporal@1']['input'];
+    };
+    readonly Folder: {
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly userId: CodecTypes['pg/int4@1']['input'];
+      readonly parentFolderId: CodecTypes['pg/int4@1']['input'] | null;
+      readonly name: CodecTypes['sql/varchar@1']['input'];
+      readonly createdAt: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly updatedAt: CodecTypes['pg/timestamp-temporal@1']['input'];
+    };
+    readonly Session: {
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly userId: CodecTypes['pg/int4@1']['input'];
+      readonly token: CodecTypes['sql/varchar@1']['input'];
+      readonly expiresAt: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly ipAddress: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly userAgent: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly createdAt: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly updatedAt: CodecTypes['pg/timestamp-temporal@1']['input'];
+    };
+    readonly SharedLink: {
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly fileId: CodecTypes['pg/int4@1']['input'];
+      readonly userId: CodecTypes['pg/int4@1']['input'];
+      readonly token: CodecTypes['sql/varchar@1']['input'];
+      readonly expiresAt: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly createdAt: CodecTypes['pg/timestamp-temporal@1']['input'];
+    };
+    readonly User: {
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly name: CodecTypes['sql/varchar@1']['input'];
+      readonly email: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly emailVerified: CodecTypes['pg/bool@1']['input'];
+      readonly image: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly userRole: CodecTypes['sql/varchar@1']['input'];
+      readonly quotaLimitBytes: CodecTypes['pg/int8@1']['input'];
+      readonly createdAt: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly updatedAt: CodecTypes['pg/timestamp-temporal@1']['input'] | null;
+    };
+    readonly Verification: {
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly identifier: CodecTypes['sql/varchar@1']['input'];
+      readonly value: CodecTypes['sql/varchar@1']['input'];
+      readonly expiresAt: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly createdAt: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly updatedAt: CodecTypes['pg/timestamp-temporal@1']['input'];
+    };
+  };
+};
+export type StorageColumnTypes = {
+  readonly public: {};
+  readonly silverbox_api: {
+    readonly account: {
+      readonly accesstoken: CodecTypes['sql/varchar@1']['output'] | null;
+      readonly accesstokenexpiresat: CodecTypes['pg/timestamp-temporal@1']['output'] | null;
+      readonly accountid: CodecTypes['sql/varchar@1']['output'];
+      readonly createdat: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly idtoken: CodecTypes['sql/varchar@1']['output'] | null;
+      readonly password: Varchar<255> | null;
+      readonly providerid: CodecTypes['sql/varchar@1']['output'];
+      readonly refreshtoken: CodecTypes['sql/varchar@1']['output'] | null;
+      readonly refreshtokenexpiresat: CodecTypes['pg/timestamp-temporal@1']['output'] | null;
+      readonly updatedat: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly userid: CodecTypes['pg/int4@1']['output'];
+    };
+    readonly audit_logs: {
+      readonly action: CodecTypes['sql/varchar@1']['output'];
+      readonly createdat: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly details: CodecTypes['sql/varchar@1']['output'] | null;
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly ipaddress: CodecTypes['sql/varchar@1']['output'];
+      readonly userid: CodecTypes['pg/int4@1']['output'];
+    };
+    readonly file_versions: {
+      readonly checksum: CodecTypes['sql/varchar@1']['output'];
+      readonly createdat: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly fileid: CodecTypes['pg/int4@1']['output'];
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly sizebytes: CodecTypes['pg/int8@1']['output'];
+      readonly storagekey: CodecTypes['sql/varchar@1']['output'];
+      readonly versionnumber: CodecTypes['pg/int4@1']['output'];
+    };
+    readonly files: {
+      readonly checksum: CodecTypes['sql/varchar@1']['output'];
+      readonly createdat: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly deletedat: CodecTypes['pg/timestamp-temporal@1']['output'] | null;
+      readonly folderid: CodecTypes['pg/int4@1']['output'];
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly isdeleted: CodecTypes['pg/bool@1']['output'];
+      readonly mimetype: CodecTypes['sql/varchar@1']['output'];
+      readonly originalname: CodecTypes['sql/varchar@1']['output'];
+      readonly sizebytes: CodecTypes['pg/int8@1']['output'];
+      readonly storagekey: CodecTypes['sql/varchar@1']['output'];
+      readonly updatedat: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly userid: CodecTypes['pg/int4@1']['output'];
+    };
+    readonly folders: {
+      readonly createdat: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly name: CodecTypes['sql/varchar@1']['output'];
+      readonly parentfolderid: CodecTypes['pg/int4@1']['output'] | null;
+      readonly updatedat: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly userid: CodecTypes['pg/int4@1']['output'];
+    };
+    readonly session: {
+      readonly createdat: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly expiresat: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly ipaddress: CodecTypes['sql/varchar@1']['output'] | null;
+      readonly token: CodecTypes['sql/varchar@1']['output'];
+      readonly updatedat: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly useragent: CodecTypes['sql/varchar@1']['output'] | null;
+      readonly userid: CodecTypes['pg/int4@1']['output'];
+    };
+    readonly shared_links: {
+      readonly createdat: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly expiresat: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly fileid: CodecTypes['pg/int4@1']['output'];
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly token: CodecTypes['sql/varchar@1']['output'];
+      readonly userid: CodecTypes['pg/int4@1']['output'];
+    };
+    readonly users: {
+      readonly createdat: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly email: Varchar<155> | null;
+      readonly emailverified: CodecTypes['pg/bool@1']['output'];
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly image: CodecTypes['sql/varchar@1']['output'] | null;
+      readonly name: Varchar<155>;
+      readonly quotalimitbytes: CodecTypes['pg/int8@1']['output'];
+      readonly updatedat: CodecTypes['pg/timestamp-temporal@1']['output'] | null;
+      readonly user_role: CodecTypes['sql/varchar@1']['output'];
+    };
+    readonly verification: {
+      readonly createdat: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly expiresat: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly identifier: CodecTypes['sql/varchar@1']['output'];
+      readonly updatedat: CodecTypes['pg/timestamp-temporal@1']['output'];
+      readonly value: CodecTypes['sql/varchar@1']['output'];
+    };
+  };
+};
+export type StorageColumnInputTypes = {
+  readonly public: {};
+  readonly silverbox_api: {
+    readonly account: {
+      readonly accesstoken: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly accesstokenexpiresat: CodecTypes['pg/timestamp-temporal@1']['input'] | null;
+      readonly accountid: CodecTypes['sql/varchar@1']['input'];
+      readonly createdat: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly idtoken: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly password: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly providerid: CodecTypes['sql/varchar@1']['input'];
+      readonly refreshtoken: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly refreshtokenexpiresat: CodecTypes['pg/timestamp-temporal@1']['input'] | null;
+      readonly updatedat: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly userid: CodecTypes['pg/int4@1']['input'];
+    };
+    readonly audit_logs: {
+      readonly action: CodecTypes['sql/varchar@1']['input'];
+      readonly createdat: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly details: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly ipaddress: CodecTypes['sql/varchar@1']['input'];
+      readonly userid: CodecTypes['pg/int4@1']['input'];
+    };
+    readonly file_versions: {
+      readonly checksum: CodecTypes['sql/varchar@1']['input'];
+      readonly createdat: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly fileid: CodecTypes['pg/int4@1']['input'];
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly sizebytes: CodecTypes['pg/int8@1']['input'];
+      readonly storagekey: CodecTypes['sql/varchar@1']['input'];
+      readonly versionnumber: CodecTypes['pg/int4@1']['input'];
+    };
+    readonly files: {
+      readonly checksum: CodecTypes['sql/varchar@1']['input'];
+      readonly createdat: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly deletedat: CodecTypes['pg/timestamp-temporal@1']['input'] | null;
+      readonly folderid: CodecTypes['pg/int4@1']['input'];
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly isdeleted: CodecTypes['pg/bool@1']['input'];
+      readonly mimetype: CodecTypes['sql/varchar@1']['input'];
+      readonly originalname: CodecTypes['sql/varchar@1']['input'];
+      readonly sizebytes: CodecTypes['pg/int8@1']['input'];
+      readonly storagekey: CodecTypes['sql/varchar@1']['input'];
+      readonly updatedat: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly userid: CodecTypes['pg/int4@1']['input'];
+    };
+    readonly folders: {
+      readonly createdat: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly name: CodecTypes['sql/varchar@1']['input'];
+      readonly parentfolderid: CodecTypes['pg/int4@1']['input'] | null;
+      readonly updatedat: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly userid: CodecTypes['pg/int4@1']['input'];
+    };
+    readonly session: {
+      readonly createdat: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly expiresat: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly ipaddress: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly token: CodecTypes['sql/varchar@1']['input'];
+      readonly updatedat: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly useragent: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly userid: CodecTypes['pg/int4@1']['input'];
+    };
+    readonly shared_links: {
+      readonly createdat: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly expiresat: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly fileid: CodecTypes['pg/int4@1']['input'];
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly token: CodecTypes['sql/varchar@1']['input'];
+      readonly userid: CodecTypes['pg/int4@1']['input'];
+    };
+    readonly users: {
+      readonly createdat: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly email: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly emailverified: CodecTypes['pg/bool@1']['input'];
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly image: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly name: CodecTypes['sql/varchar@1']['input'];
+      readonly quotalimitbytes: CodecTypes['pg/int8@1']['input'];
+      readonly updatedat: CodecTypes['pg/timestamp-temporal@1']['input'] | null;
+      readonly user_role: CodecTypes['sql/varchar@1']['input'];
+    };
+    readonly verification: {
+      readonly createdat: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly expiresat: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly identifier: CodecTypes['sql/varchar@1']['input'];
+      readonly updatedat: CodecTypes['pg/timestamp-temporal@1']['input'];
+      readonly value: CodecTypes['sql/varchar@1']['input'];
+    };
+  };
+};
 
-export namespace Models {}
+export namespace Models {
+  export type silverbox_api_User = {
+    id: CodecTypes['pg/int4@1']['output'];
+    name: Varchar<155>;
+    email: Varchar<155> | null;
+    emailVerified: CodecTypes['pg/bool@1']['output'];
+    image: CodecTypes['sql/varchar@1']['output'] | null;
+    userRole: CodecTypes['sql/varchar@1']['output'];
+    quotaLimitBytes: CodecTypes['pg/int8@1']['output'];
+    createdAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    updatedAt: CodecTypes['pg/timestamp-temporal@1']['output'] | null;
+    accounts: silverbox_api_Account[];
+    auditLogs: silverbox_api_AuditLog[];
+    files: silverbox_api_File[];
+    folders: silverbox_api_Folder[];
+    sessions: silverbox_api_Session[];
+    sharedLinks: silverbox_api_SharedLink[];
+    readonly [RelationKeys]?:
+      'accounts' | 'auditLogs' | 'files' | 'folders' | 'sessions' | 'sharedLinks';
+  };
+  export type silverbox_api_Session = {
+    id: CodecTypes['pg/int4@1']['output'];
+    userId: CodecTypes['pg/int4@1']['output'];
+    token: CodecTypes['sql/varchar@1']['output'];
+    expiresAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    ipAddress: CodecTypes['sql/varchar@1']['output'] | null;
+    userAgent: CodecTypes['sql/varchar@1']['output'] | null;
+    createdAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    updatedAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    user: silverbox_api_User;
+    readonly [RelationKeys]?: 'user';
+  };
+  export type silverbox_api_Account = {
+    id: CodecTypes['pg/int4@1']['output'];
+    userId: CodecTypes['pg/int4@1']['output'];
+    accountId: CodecTypes['sql/varchar@1']['output'];
+    providerId: CodecTypes['sql/varchar@1']['output'];
+    password: Varchar<255> | null;
+    accessToken: CodecTypes['sql/varchar@1']['output'] | null;
+    refreshToken: CodecTypes['sql/varchar@1']['output'] | null;
+    idToken: CodecTypes['sql/varchar@1']['output'] | null;
+    accessTokenExpiresAt: CodecTypes['pg/timestamp-temporal@1']['output'] | null;
+    refreshTokenExpiresAt: CodecTypes['pg/timestamp-temporal@1']['output'] | null;
+    createdAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    updatedAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    user: silverbox_api_User;
+    readonly [RelationKeys]?: 'user';
+  };
+  export type silverbox_api_Verification = {
+    id: CodecTypes['pg/int4@1']['output'];
+    identifier: CodecTypes['sql/varchar@1']['output'];
+    value: CodecTypes['sql/varchar@1']['output'];
+    expiresAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    createdAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    updatedAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    readonly [RelationKeys]?: never;
+  };
+  export type silverbox_api_Folder = {
+    id: CodecTypes['pg/int4@1']['output'];
+    userId: CodecTypes['pg/int4@1']['output'];
+    parentFolderId: CodecTypes['pg/int4@1']['output'] | null;
+    name: CodecTypes['sql/varchar@1']['output'];
+    createdAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    updatedAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    children: silverbox_api_Folder[];
+    files: silverbox_api_File[];
+    parent: silverbox_api_Folder | null;
+    user: silverbox_api_User;
+    readonly [RelationKeys]?: 'children' | 'files' | 'parent' | 'user';
+  };
+  export type silverbox_api_File = {
+    id: CodecTypes['pg/int4@1']['output'];
+    userId: CodecTypes['pg/int4@1']['output'];
+    folderId: CodecTypes['pg/int4@1']['output'];
+    originalName: CodecTypes['sql/varchar@1']['output'];
+    storageKey: CodecTypes['sql/varchar@1']['output'];
+    sizeBytes: CodecTypes['pg/int8@1']['output'];
+    mimeType: CodecTypes['sql/varchar@1']['output'];
+    checksum: CodecTypes['sql/varchar@1']['output'];
+    isDeleted: CodecTypes['pg/bool@1']['output'];
+    deletedAt: CodecTypes['pg/timestamp-temporal@1']['output'] | null;
+    createdAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    updatedAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    folder: silverbox_api_Folder;
+    sharedLinks: silverbox_api_SharedLink[];
+    user: silverbox_api_User;
+    versions: silverbox_api_FileVersion[];
+    readonly [RelationKeys]?: 'folder' | 'sharedLinks' | 'user' | 'versions';
+  };
+  export type silverbox_api_FileVersion = {
+    id: CodecTypes['pg/int4@1']['output'];
+    fileId: CodecTypes['pg/int4@1']['output'];
+    storageKey: CodecTypes['sql/varchar@1']['output'];
+    versionNumber: CodecTypes['pg/int4@1']['output'];
+    sizeBytes: CodecTypes['pg/int8@1']['output'];
+    checksum: CodecTypes['sql/varchar@1']['output'];
+    createdAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    file: silverbox_api_File;
+    readonly [RelationKeys]?: 'file';
+  };
+  export type silverbox_api_SharedLink = {
+    id: CodecTypes['pg/int4@1']['output'];
+    fileId: CodecTypes['pg/int4@1']['output'];
+    userId: CodecTypes['pg/int4@1']['output'];
+    token: CodecTypes['sql/varchar@1']['output'];
+    expiresAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    createdAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    file: silverbox_api_File;
+    user: silverbox_api_User;
+    readonly [RelationKeys]?: 'file' | 'user';
+  };
+  export type silverbox_api_AuditLog = {
+    id: CodecTypes['pg/int4@1']['output'];
+    userId: CodecTypes['pg/int4@1']['output'];
+    action: CodecTypes['sql/varchar@1']['output'];
+    ipAddress: CodecTypes['sql/varchar@1']['output'];
+    details: CodecTypes['sql/varchar@1']['output'] | null;
+    createdAt: CodecTypes['pg/timestamp-temporal@1']['output'];
+    user: silverbox_api_User;
+    readonly [RelationKeys]?: 'user';
+  };
+}
 
 export declare const models: {
-  public: {};
+  silverbox_api: {
+    User: Models.silverbox_api_User;
+    Session: Models.silverbox_api_Session;
+    Account: Models.silverbox_api_Account;
+    Verification: Models.silverbox_api_Verification;
+    Folder: Models.silverbox_api_Folder;
+    File: Models.silverbox_api_File;
+    FileVersion: Models.silverbox_api_FileVersion;
+    SharedLink: Models.silverbox_api_SharedLink;
+    AuditLog: Models.silverbox_api_AuditLog;
+  };
 };
 
 export type TypeMaps = TypeMapsType<
@@ -268,6 +774,712 @@ type ContractBase = Omit<
         readonly kind: 'postgres-schema';
         readonly entries: { readonly table: {} };
       };
+      readonly silverbox_api: {
+        readonly id: 'silverbox_api';
+        readonly kind: 'postgres-schema';
+        readonly entries: {
+          readonly table: {
+            readonly account: {
+              columns: {
+                readonly id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'function';
+                    readonly expression: 'autoincrement()';
+                  };
+                };
+                readonly userid: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+                readonly accountid: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                };
+                readonly providerid: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                };
+                readonly password: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: true;
+                  readonly typeParams: { readonly length: 255 };
+                };
+                readonly accesstoken: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: true;
+                };
+                readonly refreshtoken: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: true;
+                };
+                readonly idtoken: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: true;
+                };
+                readonly accesstokenexpiresat: {
+                  readonly nativeType: 'timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: true;
+                };
+                readonly refreshtokenexpiresat: {
+                  readonly nativeType: 'timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: true;
+                };
+                readonly createdat: {
+                  readonly nativeType: 'timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                };
+                readonly updatedat: {
+                  readonly nativeType: 'timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id']; readonly name: 'pk_account' };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'account_userid_idx_dbef1505';
+                  readonly prefix: 'account_userid_idx';
+                  readonly columns: readonly ['userid'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: 'silverbox_api' & NamespaceId;
+                    readonly tableName: 'account';
+                    readonly columns: readonly ['userid'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'silverbox_api' & NamespaceId;
+                    readonly tableName: 'users';
+                    readonly columns: readonly ['id'];
+                  };
+                  readonly name: 'userid';
+                },
+              ];
+            };
+            readonly audit_logs: {
+              columns: {
+                readonly id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'function';
+                    readonly expression: 'autoincrement()';
+                  };
+                };
+                readonly userid: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+                readonly action: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                };
+                readonly ipaddress: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                };
+                readonly details: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: true;
+                };
+                readonly createdat: {
+                  readonly nativeType: 'timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id']; readonly name: 'pk_audit_logs' };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'audit_logs_userid_idx_dbef1505';
+                  readonly prefix: 'audit_logs_userid_idx';
+                  readonly columns: readonly ['userid'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: 'silverbox_api' & NamespaceId;
+                    readonly tableName: 'audit_logs';
+                    readonly columns: readonly ['userid'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'silverbox_api' & NamespaceId;
+                    readonly tableName: 'users';
+                    readonly columns: readonly ['id'];
+                  };
+                  readonly name: 'userid';
+                },
+              ];
+            };
+            readonly file_versions: {
+              columns: {
+                readonly id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'function';
+                    readonly expression: 'autoincrement()';
+                  };
+                };
+                readonly fileid: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+                readonly storagekey: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                };
+                readonly versionnumber: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+                readonly sizebytes: {
+                  readonly nativeType: 'int8';
+                  readonly codecId: 'pg/int8@1';
+                  readonly nullable: false;
+                };
+                readonly checksum: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                };
+                readonly createdat: {
+                  readonly nativeType: 'timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id']; readonly name: 'pk_file_versions' };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'file_versions_fileid_idx_e80166d9';
+                  readonly prefix: 'file_versions_fileid_idx';
+                  readonly columns: readonly ['fileid'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: 'silverbox_api' & NamespaceId;
+                    readonly tableName: 'file_versions';
+                    readonly columns: readonly ['fileid'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'silverbox_api' & NamespaceId;
+                    readonly tableName: 'files';
+                    readonly columns: readonly ['id'];
+                  };
+                  readonly name: 'fk_file_versions_files';
+                },
+              ];
+            };
+            readonly files: {
+              columns: {
+                readonly id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'function';
+                    readonly expression: 'autoincrement()';
+                  };
+                };
+                readonly userid: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+                readonly folderid: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+                readonly originalname: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                };
+                readonly storagekey: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                };
+                readonly sizebytes: {
+                  readonly nativeType: 'int8';
+                  readonly codecId: 'pg/int8@1';
+                  readonly nullable: false;
+                };
+                readonly mimetype: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                };
+                readonly checksum: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                };
+                readonly isdeleted: {
+                  readonly nativeType: 'bool';
+                  readonly codecId: 'pg/bool@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'pg/bool@1', false>;
+                  };
+                };
+                readonly deletedat: {
+                  readonly nativeType: 'timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: true;
+                };
+                readonly createdat: {
+                  readonly nativeType: 'timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                };
+                readonly updatedat: {
+                  readonly nativeType: 'timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id']; readonly name: 'pk_files' };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'files_userid_idx_dbef1505';
+                  readonly prefix: 'files_userid_idx';
+                  readonly columns: readonly ['userid'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'files_folderid_idx_93633dd5';
+                  readonly prefix: 'files_folderid_idx';
+                  readonly columns: readonly ['folderid'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: 'silverbox_api' & NamespaceId;
+                    readonly tableName: 'files';
+                    readonly columns: readonly ['userid'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'silverbox_api' & NamespaceId;
+                    readonly tableName: 'users';
+                    readonly columns: readonly ['id'];
+                  };
+                  readonly name: 'fk_files_users';
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: 'silverbox_api' & NamespaceId;
+                    readonly tableName: 'files';
+                    readonly columns: readonly ['folderid'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'silverbox_api' & NamespaceId;
+                    readonly tableName: 'folders';
+                    readonly columns: readonly ['id'];
+                  };
+                  readonly name: 'fk_files_folders';
+                },
+              ];
+            };
+            readonly folders: {
+              columns: {
+                readonly id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'function';
+                    readonly expression: 'autoincrement()';
+                  };
+                };
+                readonly userid: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+                readonly parentfolderid: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: true;
+                };
+                readonly name: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                };
+                readonly createdat: {
+                  readonly nativeType: 'timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                };
+                readonly updatedat: {
+                  readonly nativeType: 'timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id']; readonly name: 'pk_folders' };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'folders_userid_idx_dbef1505';
+                  readonly prefix: 'folders_userid_idx';
+                  readonly columns: readonly ['userid'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'folders_parentfolderid_idx_0e23b9fa';
+                  readonly prefix: 'folders_parentfolderid_idx';
+                  readonly columns: readonly ['parentfolderid'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: 'silverbox_api' & NamespaceId;
+                    readonly tableName: 'folders';
+                    readonly columns: readonly ['userid'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'silverbox_api' & NamespaceId;
+                    readonly tableName: 'users';
+                    readonly columns: readonly ['id'];
+                  };
+                  readonly name: 'userid';
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: 'silverbox_api' & NamespaceId;
+                    readonly tableName: 'folders';
+                    readonly columns: readonly ['parentfolderid'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'silverbox_api' & NamespaceId;
+                    readonly tableName: 'folders';
+                    readonly columns: readonly ['id'];
+                  };
+                  readonly name: 'fk_folders_folders';
+                },
+              ];
+            };
+            readonly session: {
+              columns: {
+                readonly id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'function';
+                    readonly expression: 'autoincrement()';
+                  };
+                };
+                readonly userid: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+                readonly token: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                };
+                readonly expiresat: {
+                  readonly nativeType: 'timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: false;
+                };
+                readonly ipaddress: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: true;
+                };
+                readonly useragent: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: true;
+                };
+                readonly createdat: {
+                  readonly nativeType: 'timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                };
+                readonly updatedat: {
+                  readonly nativeType: 'timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id']; readonly name: 'pk_tbl' };
+              uniques: readonly [
+                { readonly columns: readonly ['token']; readonly name: 'token_unq' },
+              ];
+              indexes: readonly [
+                {
+                  readonly name: 'session_userid_idx_dbef1505';
+                  readonly prefix: 'session_userid_idx';
+                  readonly columns: readonly ['userid'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: 'silverbox_api' & NamespaceId;
+                    readonly tableName: 'session';
+                    readonly columns: readonly ['userid'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'silverbox_api' & NamespaceId;
+                    readonly tableName: 'users';
+                    readonly columns: readonly ['id'];
+                  };
+                  readonly name: 'userid';
+                },
+              ];
+            };
+            readonly shared_links: {
+              columns: {
+                readonly id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'function';
+                    readonly expression: 'autoincrement()';
+                  };
+                };
+                readonly fileid: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+                readonly userid: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+                readonly token: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                };
+                readonly expiresat: {
+                  readonly nativeType: 'timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: false;
+                };
+                readonly createdat: {
+                  readonly nativeType: 'timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id']; readonly name: 'pk_shared_links' };
+              uniques: readonly [
+                { readonly columns: readonly ['token']; readonly name: 'token_link_unq' },
+              ];
+              indexes: readonly [
+                {
+                  readonly name: 'shared_links_fileid_idx_e80166d9';
+                  readonly prefix: 'shared_links_fileid_idx';
+                  readonly columns: readonly ['fileid'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'shared_links_userid_idx_dbef1505';
+                  readonly prefix: 'shared_links_userid_idx';
+                  readonly columns: readonly ['userid'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: 'silverbox_api' & NamespaceId;
+                    readonly tableName: 'shared_links';
+                    readonly columns: readonly ['fileid'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'silverbox_api' & NamespaceId;
+                    readonly tableName: 'files';
+                    readonly columns: readonly ['id'];
+                  };
+                  readonly name: 'fileid';
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: 'silverbox_api' & NamespaceId;
+                    readonly tableName: 'shared_links';
+                    readonly columns: readonly ['userid'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'silverbox_api' & NamespaceId;
+                    readonly tableName: 'users';
+                    readonly columns: readonly ['id'];
+                  };
+                  readonly name: 'userid';
+                },
+              ];
+            };
+            readonly users: {
+              columns: {
+                readonly id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'function';
+                    readonly expression: 'autoincrement()';
+                  };
+                };
+                readonly name: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly length: 155 };
+                };
+                readonly email: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: true;
+                  readonly typeParams: { readonly length: 155 };
+                };
+                readonly emailverified: {
+                  readonly nativeType: 'bool';
+                  readonly codecId: 'pg/bool@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'pg/bool@1', false>;
+                  };
+                };
+                readonly image: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: true;
+                };
+                readonly user_role: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                };
+                readonly quotalimitbytes: {
+                  readonly nativeType: 'int8';
+                  readonly codecId: 'pg/int8@1';
+                  readonly nullable: false;
+                };
+                readonly createdat: {
+                  readonly nativeType: 'timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                };
+                readonly updatedat: {
+                  readonly nativeType: 'timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: true;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id']; readonly name: 'pk_users' };
+              uniques: readonly [
+                { readonly columns: readonly ['email']; readonly name: 'email_unq' },
+              ];
+              indexes: readonly [];
+              foreignKeys: readonly [];
+            };
+            readonly verification: {
+              columns: {
+                readonly id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'function';
+                    readonly expression: 'autoincrement()';
+                  };
+                };
+                readonly identifier: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                };
+                readonly value: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                };
+                readonly expiresat: {
+                  readonly nativeType: 'timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: false;
+                };
+                readonly createdat: {
+                  readonly nativeType: 'timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                };
+                readonly updatedat: {
+                  readonly nativeType: 'timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id']; readonly name: 'pk_verification' };
+              uniques: readonly [];
+              indexes: readonly [];
+              foreignKeys: readonly [];
+            };
+          };
+        };
+      };
     };
     readonly storageHash: StorageHash;
   }>,
@@ -275,11 +1487,815 @@ type ContractBase = Omit<
 > & {
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
-  readonly roots: Record<string, never>;
+  readonly roots: {
+    readonly users: { readonly namespace: 'silverbox_api' & NamespaceId; readonly model: 'User' };
+    readonly session: {
+      readonly namespace: 'silverbox_api' & NamespaceId;
+      readonly model: 'Session';
+    };
+    readonly account: {
+      readonly namespace: 'silverbox_api' & NamespaceId;
+      readonly model: 'Account';
+    };
+    readonly verification: {
+      readonly namespace: 'silverbox_api' & NamespaceId;
+      readonly model: 'Verification';
+    };
+    readonly folders: {
+      readonly namespace: 'silverbox_api' & NamespaceId;
+      readonly model: 'Folder';
+    };
+    readonly files: { readonly namespace: 'silverbox_api' & NamespaceId; readonly model: 'File' };
+    readonly file_versions: {
+      readonly namespace: 'silverbox_api' & NamespaceId;
+      readonly model: 'FileVersion';
+    };
+    readonly shared_links: {
+      readonly namespace: 'silverbox_api' & NamespaceId;
+      readonly model: 'SharedLink';
+    };
+    readonly audit_logs: {
+      readonly namespace: 'silverbox_api' & NamespaceId;
+      readonly model: 'AuditLog';
+    };
+  };
   readonly domain: {
     readonly namespaces: {
-      readonly public: {
-        readonly models: Record<string, never>;
+      readonly silverbox_api: {
+        readonly models: {
+          readonly Account: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly userId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly accountId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly providerId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly password: {
+                readonly nullable: true;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 255 };
+                };
+              };
+              readonly accessToken: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly refreshToken: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly idToken: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly accessTokenExpiresAt: {
+                readonly nullable: true;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                };
+              };
+              readonly refreshTokenExpiresAt: {
+                readonly nullable: true;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                };
+              };
+            };
+            readonly relations: {
+              readonly user: {
+                readonly to: {
+                  readonly namespace: 'silverbox_api' & NamespaceId;
+                  readonly model: 'User';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['userId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'account';
+              readonly namespaceId: 'silverbox_api';
+              readonly fields: {
+                readonly id: { readonly column: 'id' };
+                readonly userId: { readonly column: 'userid' };
+                readonly accountId: { readonly column: 'accountid' };
+                readonly providerId: { readonly column: 'providerid' };
+                readonly password: { readonly column: 'password' };
+                readonly accessToken: { readonly column: 'accesstoken' };
+                readonly refreshToken: { readonly column: 'refreshtoken' };
+                readonly idToken: { readonly column: 'idtoken' };
+                readonly accessTokenExpiresAt: { readonly column: 'accesstokenexpiresat' };
+                readonly refreshTokenExpiresAt: { readonly column: 'refreshtokenexpiresat' };
+                readonly createdAt: { readonly column: 'createdat' };
+                readonly updatedAt: { readonly column: 'updatedat' };
+              };
+            };
+          };
+          readonly AuditLog: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly userId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly action: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly ipAddress: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly details: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                };
+              };
+            };
+            readonly relations: {
+              readonly user: {
+                readonly to: {
+                  readonly namespace: 'silverbox_api' & NamespaceId;
+                  readonly model: 'User';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['userId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'audit_logs';
+              readonly namespaceId: 'silverbox_api';
+              readonly fields: {
+                readonly id: { readonly column: 'id' };
+                readonly userId: { readonly column: 'userid' };
+                readonly action: { readonly column: 'action' };
+                readonly ipAddress: { readonly column: 'ipaddress' };
+                readonly details: { readonly column: 'details' };
+                readonly createdAt: { readonly column: 'createdat' };
+              };
+            };
+          };
+          readonly File: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly userId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly folderId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly originalName: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly storageKey: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly sizeBytes: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int8@1' };
+              };
+              readonly mimeType: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly checksum: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly isDeleted: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
+              };
+              readonly deletedAt: {
+                readonly nullable: true;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                };
+              };
+            };
+            readonly relations: {
+              readonly folder: {
+                readonly to: {
+                  readonly namespace: 'silverbox_api' & NamespaceId;
+                  readonly model: 'Folder';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['folderId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly sharedLinks: {
+                readonly to: {
+                  readonly namespace: 'silverbox_api' & NamespaceId;
+                  readonly model: 'SharedLink';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['fileId'];
+                };
+              };
+              readonly user: {
+                readonly to: {
+                  readonly namespace: 'silverbox_api' & NamespaceId;
+                  readonly model: 'User';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['userId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly versions: {
+                readonly to: {
+                  readonly namespace: 'silverbox_api' & NamespaceId;
+                  readonly model: 'FileVersion';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['fileId'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'files';
+              readonly namespaceId: 'silverbox_api';
+              readonly fields: {
+                readonly id: { readonly column: 'id' };
+                readonly userId: { readonly column: 'userid' };
+                readonly folderId: { readonly column: 'folderid' };
+                readonly originalName: { readonly column: 'originalname' };
+                readonly storageKey: { readonly column: 'storagekey' };
+                readonly sizeBytes: { readonly column: 'sizebytes' };
+                readonly mimeType: { readonly column: 'mimetype' };
+                readonly checksum: { readonly column: 'checksum' };
+                readonly isDeleted: { readonly column: 'isdeleted' };
+                readonly deletedAt: { readonly column: 'deletedat' };
+                readonly createdAt: { readonly column: 'createdat' };
+                readonly updatedAt: { readonly column: 'updatedat' };
+              };
+            };
+          };
+          readonly FileVersion: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly fileId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly storageKey: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly versionNumber: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly sizeBytes: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int8@1' };
+              };
+              readonly checksum: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                };
+              };
+            };
+            readonly relations: {
+              readonly file: {
+                readonly to: {
+                  readonly namespace: 'silverbox_api' & NamespaceId;
+                  readonly model: 'File';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['fileId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'file_versions';
+              readonly namespaceId: 'silverbox_api';
+              readonly fields: {
+                readonly id: { readonly column: 'id' };
+                readonly fileId: { readonly column: 'fileid' };
+                readonly storageKey: { readonly column: 'storagekey' };
+                readonly versionNumber: { readonly column: 'versionnumber' };
+                readonly sizeBytes: { readonly column: 'sizebytes' };
+                readonly checksum: { readonly column: 'checksum' };
+                readonly createdAt: { readonly column: 'createdat' };
+              };
+            };
+          };
+          readonly Folder: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly userId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly parentFolderId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly name: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                };
+              };
+            };
+            readonly relations: {
+              readonly children: {
+                readonly to: {
+                  readonly namespace: 'silverbox_api' & NamespaceId;
+                  readonly model: 'Folder';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['parentFolderId'];
+                };
+              };
+              readonly files: {
+                readonly to: {
+                  readonly namespace: 'silverbox_api' & NamespaceId;
+                  readonly model: 'File';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['folderId'];
+                };
+              };
+              readonly parent: {
+                readonly to: {
+                  readonly namespace: 'silverbox_api' & NamespaceId;
+                  readonly model: 'Folder';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: true;
+                readonly on: {
+                  readonly localFields: readonly ['parentFolderId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly user: {
+                readonly to: {
+                  readonly namespace: 'silverbox_api' & NamespaceId;
+                  readonly model: 'User';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['userId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'folders';
+              readonly namespaceId: 'silverbox_api';
+              readonly fields: {
+                readonly id: { readonly column: 'id' };
+                readonly userId: { readonly column: 'userid' };
+                readonly parentFolderId: { readonly column: 'parentfolderid' };
+                readonly name: { readonly column: 'name' };
+                readonly createdAt: { readonly column: 'createdat' };
+                readonly updatedAt: { readonly column: 'updatedat' };
+              };
+            };
+          };
+          readonly Session: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly userId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly token: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly expiresAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                };
+              };
+              readonly ipAddress: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly userAgent: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                };
+              };
+            };
+            readonly relations: {
+              readonly user: {
+                readonly to: {
+                  readonly namespace: 'silverbox_api' & NamespaceId;
+                  readonly model: 'User';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['userId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'session';
+              readonly namespaceId: 'silverbox_api';
+              readonly fields: {
+                readonly id: { readonly column: 'id' };
+                readonly userId: { readonly column: 'userid' };
+                readonly token: { readonly column: 'token' };
+                readonly expiresAt: { readonly column: 'expiresat' };
+                readonly ipAddress: { readonly column: 'ipaddress' };
+                readonly userAgent: { readonly column: 'useragent' };
+                readonly createdAt: { readonly column: 'createdat' };
+                readonly updatedAt: { readonly column: 'updatedat' };
+              };
+            };
+          };
+          readonly SharedLink: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly fileId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly userId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly token: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly expiresAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                };
+              };
+            };
+            readonly relations: {
+              readonly file: {
+                readonly to: {
+                  readonly namespace: 'silverbox_api' & NamespaceId;
+                  readonly model: 'File';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['fileId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly user: {
+                readonly to: {
+                  readonly namespace: 'silverbox_api' & NamespaceId;
+                  readonly model: 'User';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['userId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'shared_links';
+              readonly namespaceId: 'silverbox_api';
+              readonly fields: {
+                readonly id: { readonly column: 'id' };
+                readonly fileId: { readonly column: 'fileid' };
+                readonly userId: { readonly column: 'userid' };
+                readonly token: { readonly column: 'token' };
+                readonly expiresAt: { readonly column: 'expiresat' };
+                readonly createdAt: { readonly column: 'createdat' };
+              };
+            };
+          };
+          readonly User: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly name: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 155 };
+                };
+              };
+              readonly email: {
+                readonly nullable: true;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 155 };
+                };
+              };
+              readonly emailVerified: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
+              };
+              readonly image: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly userRole: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly quotaLimitBytes: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int8@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                };
+              };
+              readonly updatedAt: {
+                readonly nullable: true;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                };
+              };
+            };
+            readonly relations: {
+              readonly accounts: {
+                readonly to: {
+                  readonly namespace: 'silverbox_api' & NamespaceId;
+                  readonly model: 'Account';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['userId'];
+                };
+              };
+              readonly auditLogs: {
+                readonly to: {
+                  readonly namespace: 'silverbox_api' & NamespaceId;
+                  readonly model: 'AuditLog';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['userId'];
+                };
+              };
+              readonly files: {
+                readonly to: {
+                  readonly namespace: 'silverbox_api' & NamespaceId;
+                  readonly model: 'File';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['userId'];
+                };
+              };
+              readonly folders: {
+                readonly to: {
+                  readonly namespace: 'silverbox_api' & NamespaceId;
+                  readonly model: 'Folder';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['userId'];
+                };
+              };
+              readonly sessions: {
+                readonly to: {
+                  readonly namespace: 'silverbox_api' & NamespaceId;
+                  readonly model: 'Session';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['userId'];
+                };
+              };
+              readonly sharedLinks: {
+                readonly to: {
+                  readonly namespace: 'silverbox_api' & NamespaceId;
+                  readonly model: 'SharedLink';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['userId'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'users';
+              readonly namespaceId: 'silverbox_api';
+              readonly fields: {
+                readonly id: { readonly column: 'id' };
+                readonly name: { readonly column: 'name' };
+                readonly email: { readonly column: 'email' };
+                readonly emailVerified: { readonly column: 'emailverified' };
+                readonly image: { readonly column: 'image' };
+                readonly userRole: { readonly column: 'user_role' };
+                readonly quotaLimitBytes: { readonly column: 'quotalimitbytes' };
+                readonly createdAt: { readonly column: 'createdat' };
+                readonly updatedAt: { readonly column: 'updatedat' };
+              };
+            };
+          };
+          readonly Verification: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly identifier: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly value: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+              };
+              readonly expiresAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'verification';
+              readonly namespaceId: 'silverbox_api';
+              readonly fields: {
+                readonly id: { readonly column: 'id' };
+                readonly identifier: { readonly column: 'identifier' };
+                readonly value: { readonly column: 'value' };
+                readonly expiresAt: { readonly column: 'expiresat' };
+                readonly createdAt: { readonly column: 'createdat' };
+                readonly updatedAt: { readonly column: 'updatedat' };
+              };
+            };
+          };
+        };
       };
     };
   };
@@ -302,6 +2318,58 @@ type ContractBase = Omit<
     };
   };
   readonly extensions: {};
+  readonly execution: {
+    readonly executionHash: ExecutionHash;
+    readonly mutations: {
+      readonly defaults: readonly [
+        {
+          readonly ref: {
+            readonly namespace: 'silverbox_api';
+            readonly table: 'account';
+            readonly column: 'updatedat';
+          };
+          readonly onCreate: { readonly kind: 'generator'; readonly id: 'instantNow' };
+          readonly onUpdate: { readonly kind: 'generator'; readonly id: 'instantNow' };
+        },
+        {
+          readonly ref: {
+            readonly namespace: 'silverbox_api';
+            readonly table: 'files';
+            readonly column: 'updatedat';
+          };
+          readonly onCreate: { readonly kind: 'generator'; readonly id: 'instantNow' };
+          readonly onUpdate: { readonly kind: 'generator'; readonly id: 'instantNow' };
+        },
+        {
+          readonly ref: {
+            readonly namespace: 'silverbox_api';
+            readonly table: 'folders';
+            readonly column: 'updatedat';
+          };
+          readonly onCreate: { readonly kind: 'generator'; readonly id: 'instantNow' };
+          readonly onUpdate: { readonly kind: 'generator'; readonly id: 'instantNow' };
+        },
+        {
+          readonly ref: {
+            readonly namespace: 'silverbox_api';
+            readonly table: 'session';
+            readonly column: 'updatedat';
+          };
+          readonly onCreate: { readonly kind: 'generator'; readonly id: 'instantNow' };
+          readonly onUpdate: { readonly kind: 'generator'; readonly id: 'instantNow' };
+        },
+        {
+          readonly ref: {
+            readonly namespace: 'silverbox_api';
+            readonly table: 'verification';
+            readonly column: 'updatedat';
+          };
+          readonly onCreate: { readonly kind: 'generator'; readonly id: 'instantNow' };
+          readonly onUpdate: { readonly kind: 'generator'; readonly id: 'instantNow' };
+        },
+      ];
+    };
+  };
   readonly meta: {};
 
   readonly profileHash: ProfileHash;

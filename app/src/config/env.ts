@@ -13,7 +13,7 @@ const envSchema = z.object({
 	DATABASE_URL: z
 		.string()
 		.min(1, 'DATABASE_URL is required')
-		.refine((v) => v.startsWith('postgresql://'), 'DATABASE_URL must start with postgresql://'),
+		.refine((v) => v.startsWith('postgres'), 'DATABASE_URL must start with postgresql://'),
 
 	LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 })

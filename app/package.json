@@ -16,12 +16,14 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "db:emit": "prisma contract emit",
     "format": "prettier src prisma.config.ts --write"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
     "better-auth": "1.7.6",
     "express": "5.2.1",
+    "pg": "8.23.0",
     "pino": "10.3.1",
     "pino-http": "11.0.0",
     "swagger-jsdoc": "6.3.0",
@@ -31,14 +33,18 @@
   "devDependencies": {
     "@types/express": "5.0.6",
     "@types/node": "24.10.0",
+    "@types/pg": "8.23.1",
     "@types/swagger-jsdoc": "6.0.4",
     "@types/swagger-ui-express": "4.1.8",
     "prettier": "3.9.9",
+    "prisma": "7.10.0",
     "tsx": "4.23.12",
     "typescript": "7.0.2"
   },
   "allowScripts": {
     "@scarf/scarf@1.4.0": true,
-    "esbuild@0.28.2": true
+    "esbuild@0.28.2": true,
+    "@prisma/engines@7.10.0": true,
+    "prisma@7.10.0": true
   }
 }

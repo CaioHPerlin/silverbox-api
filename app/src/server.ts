@@ -1,6 +1,5 @@
 import { createApp } from './app.js'
 import { env } from './config/env.js'
-import { db } from './prisma/db.js'
 
 async function bootstrap(): Promise<void> {
 	const app = createApp()

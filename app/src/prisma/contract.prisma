@@ -1,11 +1,11 @@
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "./generated"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
-  schemas  = ["silverbox-api"]
+  schemas  = ["silverbox_api"]
 }
 
 model User {
@@ -27,7 +27,7 @@ model User {
   auditLogs   AuditLog[]
 
   @@map("users")
-  @@schema("silverbox-api")
+  @@schema("silverbox_api")
 }
 
 model Session {
@@ -43,7 +43,7 @@ model Session {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "userid")
 
   @@map("session")
-  @@schema("silverbox-api")
+  @@schema("silverbox_api")
 }
 
 model Account {
@@ -63,7 +63,7 @@ model Account {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "userid")
 
   @@map("account")
-  @@schema("silverbox-api")
+  @@schema("silverbox_api")
 }
 
 model Verification {
@@ -75,7 +75,7 @@ model Verification {
   updatedAt  DateTime @updatedAt @map("updatedat") @db.Timestamp
 
   @@map("verification")
-  @@schema("silverbox-api")
+  @@schema("silverbox_api")
 }
 
 model Folder {
@@ -92,7 +92,7 @@ model Folder {
   files    File[]
 
   @@map("folders")
-  @@schema("silverbox-api")
+  @@schema("silverbox_api")
 }
 
 model File {
@@ -115,7 +115,7 @@ model File {
   sharedLinks SharedLink[]
 
   @@map("files")
-  @@schema("silverbox-api")
+  @@schema("silverbox_api")
 }
 
 model FileVersion {
@@ -130,7 +130,7 @@ model FileVersion {
   file File @relation(fields: [fileId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "fk_file_versions_files")
 
   @@map("file_versions")
-  @@schema("silverbox-api")
+  @@schema("silverbox_api")
 }
 
 model SharedLink {
@@ -146,7 +146,7 @@ model SharedLink {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "userid")
 
   @@map("shared_links")
-  @@schema("silverbox-api")
+  @@schema("silverbox_api")
 }
 
 model AuditLog {
@@ -160,5 +160,5 @@ model AuditLog {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "userid")
 
   @@map("audit_logs")
-  @@schema("silverbox-api")
+  @@schema("silverbox_api")
 }

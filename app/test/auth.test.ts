@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import { test } from 'node:test'
 import pg from 'pg'
@@ -29,7 +30,7 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async () 
 
 	try {
 		await waitForServer(server)
-		const email = `auth-${crypto.randomUUID()}@example.com`
+		const email = `auth-${randomUUID()}@example.com`
 		const signup = await fetch(`${baseURL}/auth/register`, {
 			method: 'POST',
 			headers: { Origin: baseURL, 'Content-Type': 'application/json' },

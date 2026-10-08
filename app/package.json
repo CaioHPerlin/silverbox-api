@@ -15,9 +15,9 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "test": "node --test test/*.test.mjs",
+    "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "format": "prettier src prisma.config.ts --write",
+    "format": "prettier src test prisma.config.ts --write",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy"
   },

@@ -5,18 +5,31 @@ if (existsSync('.env')) {
 	process.loadEnvFile()
 }
 
-const envSchema = z.object({
-	NODE_ENV: z.enum(['development', 'production']).default('development'),
+const envSchema = z
+	.object({
+		NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 
-	PORT: z.coerce.number().int().positive().default(8000),
+		PORT: z.coerce.number().int().min(1).max(65535).default(8000),
 
-	DATABASE_URL: z
-		.string()
-		.min(1, 'DATABASE_URL is required')
-		.refine((v) => v.startsWith('postgresql://'), 'DATABASE_URL must start with postgresql://'),
+		DATABASE_URL: z
+			.url()
+			.refine(
+				(value) => /^postgres(?:ql)?:\/\//.test(value),
+				'DATABASE_URL must use PostgreSQL',
+			),
+		BETTER_AUTH_URL: z
+			.url()
+			.refine((value) => /^https?:\/\//.test(value), 'BETTER_AUTH_URL must use HTTP(S)'),
+		BETTER_AUTH_SECRET: z.string().min(32, 'BETTER_AUTH_SECRET must be at least 32 characters'),
+		GOOGLE_CLIENT_ID: z.string().optional(),
+		GOOGLE_CLIENT_SECRET: z.string().optional(),
 
-	LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
-})
+		LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+	})
+	.refine((value) => Boolean(value.GOOGLE_CLIENT_ID) === Boolean(value.GOOGLE_CLIENT_SECRET), {
+		message: 'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together',
+		path: ['GOOGLE_CLIENT_ID'],
+	})
 
 function loadEnv() {
 	const result = envSchema.safeParse(process.env)

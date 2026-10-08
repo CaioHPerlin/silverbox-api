@@ -1,0 +1,21 @@
+name: silverbox-api-dev
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nuvem
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: nuvem
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - silverbox_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U nuvem -d nuvem']
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+volumes:
+  silverbox_db_data:

@@ -6,22 +6,27 @@
   "license": "ISC",
   "author": "TADS 6 (2026/2)",
   "type": "module",
-  "packageManager": "npm@11.19.0",
   "engines": {
     "node": ">=24",
-    "npm": ">=11"
+    "npm": ">=11",
+    "pnpm": ">=11"
   },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "db:emit": "prisma contract emit",
-    "format": "prettier src prisma.config.ts --write"
+    "format": "prettier src test prisma.config.ts --write",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy"
   },
   "dependencies": {
-    "@prisma/orm-postgres": "8.0.0-rc.11",
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "better-auth": "1.7.6",
     "express": "5.2.1",
+    "pg": "8.23.0",
     "pino": "10.3.1",
     "pino-http": "11.0.0",
     "swagger-jsdoc": "6.3.0",
@@ -29,14 +34,20 @@
     "zod": "4.6.2"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.4.0",
     "@types/express": "5.0.6",
     "@types/node": "24.10.0",
+    "@types/pg": "8.23.1",
     "@types/swagger-jsdoc": "6.0.4",
     "@types/swagger-ui-express": "4.1.8",
     "prettier": "3.9.9",
-    "prisma": "8.0.0-rc.15",
+    "prisma": "7.10.0",
     "tsx": "4.23.12",
     "typescript": "7.0.2"
+  },
+  "allowScripts": {
+    "@scarf/scarf@1.4.0": true,
+    "esbuild@0.28.2": true,
+    "@prisma/engines@7.10.0": true,
+    "prisma@7.10.0": true
   }
 }

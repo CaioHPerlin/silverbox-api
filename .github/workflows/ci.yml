@@ -34,6 +34,8 @@ jobs:
       DATABASE_URL: postgresql://nuvem:changeme@127.0.0.1:5432/nuvem
       BETTER_AUTH_URL: http://127.0.0.1:18000
       BETTER_AUTH_SECRET: 0123456789abcdef0123456789abcdef
+      GOOGLE_CLIENT_ID: silverbox-ci.apps.googleusercontent.com
+      GOOGLE_CLIENT_SECRET: silverbox-ci-secret
       PORT: 18000
 
     defaults:

@@ -30,7 +30,7 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async () 
 	try {
 		await waitForServer(server)
 		const email = `auth-${crypto.randomUUID()}@example.com`
-		const signup = await fetch(`${baseURL}/api/auth/sign-up/email`, {
+		const signup = await fetch(`${baseURL}/auth/register`, {
 			method: 'POST',
 			headers: { Origin: baseURL, 'Content-Type': 'application/json' },
 			body: JSON.stringify({
@@ -58,29 +58,43 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async () 
 			await database.end()
 		}
 
-		const session = await fetch(`${baseURL}/api/auth/get-session`, {
+		const session = await fetch(`${baseURL}/users/me`, {
 			headers: { Cookie: cookie },
 		})
 		assert.equal(session.status, 200)
 		assert.equal((await session.json()).user.email, email)
 
-		const signin = await fetch(`${baseURL}/api/auth/sign-in/email`, {
+		const unauthorized = await fetch(`${baseURL}/users/me`)
+		assert.equal(unauthorized.status, 401)
+		const google = await fetch(`${baseURL}/auth/google`, {
+			headers: { Origin: baseURL },
+			redirect: 'manual',
+		})
+		assert.equal(google.status, 302)
+		const googleURL = new URL(google.headers.get('location'))
+		assert.equal(googleURL.origin, 'https://accounts.google.com')
+		assert.equal(
+			googleURL.searchParams.get('redirect_uri'),
+			`${baseURL}/api/auth/callback/google`,
+		)
+
+		const signin = await fetch(`${baseURL}/auth/login`, {
 			method: 'POST',
 			headers: { Origin: baseURL, 'Content-Type': 'application/json' },
 			body: JSON.stringify({ email, password: 'correct-horse-battery-staple' }),
 		})
 		assert.equal(signin.status, 200)
 
-		const signout = await fetch(`${baseURL}/api/auth/sign-out`, {
+		const signout = await fetch(`${baseURL}/auth/logout`, {
 			method: 'POST',
 			headers: { Cookie: cookie, Origin: baseURL, 'Content-Type': 'application/json' },
 			body: '{}',
 		})
 		assert.equal(signout.status, 200)
-		const expired = await fetch(`${baseURL}/api/auth/get-session`, {
+		const expired = await fetch(`${baseURL}/users/me`, {
 			headers: { Cookie: cookie },
 		})
-		assert.equal(await expired.json(), null)
+		assert.equal(expired.status, 401)
 	} finally {
 		server.kill('SIGTERM')
 		if (server.exitCode === null) await once(server, 'exit')

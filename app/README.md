@@ -23,7 +23,9 @@ pnpm dev
 
 With npm, use `npm ci`, `npm run db:generate`, `npm run db:migrate`, and `npm run dev` instead.
 
-The database is available on `127.0.0.1:5432`. The API listens on `http://localhost:8000`; Better Auth routes are under `/api/auth`. Google sign-in is enabled only when both Google credentials are set. `BETTER_AUTH_URL` must match the public API origin. In production, use an HTTPS URL and a private secret.
+The database is available on `127.0.0.1:5432`. The API listens on `http://localhost:8000`. The minimum API routes are `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, and `GET /users/me`. The full Better Auth API remains available under `/api/auth`.
+
+Google sign-in is enabled when both Google credentials are set; start it with `GET /auth/google`. In Google Cloud Console, register this authorized redirect URI: `http://localhost:8000/api/auth/callback/google`. For deployment, register `${BETTER_AUTH_URL}/api/auth/callback/google` using the production HTTPS URL. `BETTER_AUTH_URL` must match the public API origin. In production, use a private secret.
 
 To stop the database without deleting data, run `docker compose down` from `app/`.
 

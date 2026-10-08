@@ -1,7 +1,9 @@
 import express, { type Application } from 'express'
 import { loggerMiddleware } from './middleware/logger.js'
 import swaggerUi from 'swagger-ui-express'
+import { toNodeHandler } from 'better-auth/node'
 import { swaggerSpec } from './config/swagger.js'
+import { auth } from './lib/auth.js'
 
 export function createApp(): Application {
 	const app = express()
@@ -10,6 +12,7 @@ export function createApp(): Application {
 	app.set('trust proxy', 1)
 	app.use(loggerMiddleware)
 	app.disable('x-powered-by')
+	app.all('/api/auth/*splat', toNodeHandler(auth))
 	app.use(express.json())
 
 	app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))

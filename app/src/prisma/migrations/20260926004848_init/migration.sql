@@ -5,13 +5,13 @@ CREATE SCHEMA IF NOT EXISTS "silverbox_api";
 CREATE TABLE "silverbox_api"."users" (
     "id" SERIAL NOT NULL,
     "name" VARCHAR(155) NOT NULL,
-    "email" VARCHAR(155),
+    "email" VARCHAR(155) NOT NULL,
     "emailverified" BOOLEAN NOT NULL DEFAULT false,
     "image" VARCHAR,
-    "user_role" VARCHAR NOT NULL,
-    "quotalimitbytes" BIGINT NOT NULL,
+    "user_role" VARCHAR NOT NULL DEFAULT 'user',
+    "quotalimitbytes" BIGINT NOT NULL DEFAULT 1073741824,
     "createdat" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedat" TIMESTAMP,
+    "updatedat" TIMESTAMP NOT NULL,
 
     CONSTRAINT "pk_users" PRIMARY KEY ("id")
 );
@@ -42,6 +42,7 @@ CREATE TABLE "silverbox_api"."account" (
     "idtoken" VARCHAR,
     "accesstokenexpiresat" TIMESTAMP,
     "refreshtokenexpiresat" TIMESTAMP,
+    "scope" VARCHAR,
     "createdat" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedat" TIMESTAMP NOT NULL,
 

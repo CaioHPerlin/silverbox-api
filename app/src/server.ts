@@ -1,5 +1,6 @@
 import { createApp } from './app.js'
 import { env } from './config/env.js'
+import { prisma } from './lib/prisma.js'
 
 async function bootstrap(): Promise<void> {
 	const app = createApp()
@@ -17,7 +18,7 @@ async function bootstrap(): Promise<void> {
 				process.exit(1)
 			}
 
-			void db.close().finally(() => process.exit(0))
+			void prisma.$disconnect().finally(() => process.exit(0))
 		})
 	}
 	process.once('SIGTERM', () => shutdown('SIGTERM'))

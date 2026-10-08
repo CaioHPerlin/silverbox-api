@@ -1,4 +1,5 @@
 import swaggerJsdoc from 'swagger-jsdoc'
+import { env } from './env.js'
 
 const swaggerOptions: swaggerJsdoc.Options = {
 	definition: {
@@ -13,7 +14,7 @@ const swaggerOptions: swaggerJsdoc.Options = {
 
 		servers: [
 			{
-				url: 'http://localhost:3000',
+				url: env.BETTER_AUTH_URL,
 				description: 'Servidor de desenvolvimento',
 			},
 		],
@@ -31,11 +32,11 @@ const swaggerOptions: swaggerJsdoc.Options = {
 
 		components: {
 			securitySchemes: {
-				bearerAuth: {
-					type: 'http',
-					scheme: 'bearer',
-					bearerFormat: 'JWT',
-					description: 'Informe o token JWT obtido no login.',
+				sessionCookie: {
+					type: 'apiKey',
+					in: 'cookie',
+					name: 'better-auth.session_token',
+					description: 'Cookie HTTP-only criada pelo Better Auth no cadastro ou login.',
 				},
 			},
 
@@ -63,26 +64,13 @@ const swaggerOptions: swaggerJsdoc.Options = {
 					properties: {
 						id: {
 							type: 'string',
-							format: 'uuid',
-							example: '550e8400-e29b-41d4-a716-446655440000',
+							example: '1',
 						},
 
 						email: {
 							type: 'string',
 							format: 'email',
 							example: 'usuario@email.com',
-						},
-
-						role: {
-							type: 'string',
-							example: 'USER',
-						},
-
-						quotaBytes: {
-							type: 'integer',
-							format: 'int64',
-							example: 1073741824,
-							description: 'Limite de armazenamento do usuário em bytes.',
 						},
 					},
 				},
@@ -92,8 +80,7 @@ const swaggerOptions: swaggerJsdoc.Options = {
 					properties: {
 						token: {
 							type: 'string',
-							description: 'Token JWT utilizado nas rotas protegidas.',
-							example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+							description: 'Token de sessão. O cliente deve preferir a cookie HTTP-only.',
 						},
 
 						user: {
@@ -107,8 +94,7 @@ const swaggerOptions: swaggerJsdoc.Options = {
 					properties: {
 						fileId: {
 							type: 'string',
-							format: 'uuid',
-							example: '550e8400-e29b-41d4-a716-446655440001',
+							example: '1',
 						},
 
 						originalName: {

@@ -1,16 +1,16 @@
 # Silverbox API
 
-Requires Node.js 24 and pnpm 11. Dependencies are pinned in `package.json` and `pnpm-lock.yaml`.
+Requires Node.js 24 and either pnpm 11 or npm 11. Dependencies are pinned in `package.json`, `pnpm-lock.yaml`, and `package-lock.json`.
 
 ## Local development
 
-From the repository root:
+From `app/`:
 
 ```sh
-docker compose -f compose.db.yml up -d --wait
+docker compose up -d --wait
 ```
 
-Then, from `app/`:
+In the same directory:
 
 ```sh
 cp .env.example .env
@@ -21,9 +21,11 @@ pnpm db:migrate
 pnpm dev
 ```
 
+With npm, use `npm ci`, `npm run db:generate`, `npm run db:migrate`, and `npm run dev` instead.
+
 The database is available on `127.0.0.1:5432`. The API listens on `http://localhost:8000`; Better Auth routes are under `/api/auth`. Google sign-in is enabled only when both Google credentials are set. `BETTER_AUTH_URL` must match the public API origin. In production, use an HTTPS URL and a private secret.
 
-To stop the database without deleting data, run `docker compose -f compose.db.yml down` from the repository root.
+To stop the database without deleting data, run `docker compose down` from `app/`.
 
 ## Auth smoke check
 

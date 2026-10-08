@@ -34,7 +34,7 @@ const options: Options = {
 			return {
 				id: r.id,
 				method: r.method,
-				path: r.path,
+				path: r.path?.startsWith('/shares/') ? '/shares/[redacted]' : r.path,
 				headers: {
 					'user-agent': r.headers['user-agent'],
 					'content-type': r.headers['content-type'],

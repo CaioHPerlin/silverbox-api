@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { existsSync } from 'node:fs'
+import { isAbsolute, resolve } from 'node:path'
 
 if (existsSync('.env')) {
 	process.loadEnvFile()
@@ -17,14 +18,20 @@ const envSchema = z
 				(value) => /^postgres(?:ql)?:\/\//.test(value),
 				'DATABASE_URL must use PostgreSQL',
 			),
-		BETTER_AUTH_URL: z
-			.url()
-			.refine((value) => /^https?:\/\//.test(value), 'BETTER_AUTH_URL must use HTTP(S)'),
+		BETTER_AUTH_URL: z.url().refine((value) => {
+			const url = new URL(value)
+			return /^https?:$/.test(url.protocol) && url.pathname === '/' && !url.search && !url.hash
+		}, 'BETTER_AUTH_URL must be an HTTP(S) origin without path, query or hash'),
 		BETTER_AUTH_SECRET: z.string().min(32, 'BETTER_AUTH_SECRET must be at least 32 characters'),
 		GOOGLE_CLIENT_ID: z.string().optional(),
 		GOOGLE_CLIENT_SECRET: z.string().optional(),
 
 		LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+		STORAGE_ROOT: z
+			.string()
+			.refine(isAbsolute, 'STORAGE_ROOT must be an absolute path')
+			.default(resolve(process.cwd(), '.data')),
+		MAX_UPLOAD_BYTES: z.coerce.number().int().positive().max(1073741824).default(1073741824),
 	})
 	.refine((value) => Boolean(value.GOOGLE_CLIENT_ID) === Boolean(value.GOOGLE_CLIENT_SECRET), {
 		message: 'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together',

@@ -19,3 +19,4 @@ bun.lockb
 .idea/
 .DS_Store
 /generated/prisma
+.data/

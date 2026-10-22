@@ -17,6 +17,7 @@ test('ARM64 production release becomes healthy and failed replacement restores p
   const root = mkdtempSync(join(tmpdir(), 'silverbox-release-'));
   const project = `silverbox-release-${component}-${process.pid}`;
   let createdNetwork = false;
+  let proof: { cookie: string; id: number } | undefined;
   const run = (cmd: string, args: string[], input?: string) => execFileSync(cmd, args, {
     encoding: 'utf8', input, env: { ...process.env, IMAGE: image }, timeout: 240_000, stdio: ['pipe', 'pipe', 'pipe'],
   });
@@ -67,18 +68,27 @@ test('ARM64 production release becomes healthy and failed replacement restores p
           assert.equal(await downloaded.text(),'hello');
           assert.match(signup.headers.get('set-cookie'),/Secure/i);
           assert.equal(process.getuid(),1000);
-          console.log('production-ready, registration, secure cookie, uid1000');
+          console.log(JSON.stringify({cookie,id:file.id}));
         })().catch(e=>{console.error(e);process.exit(1)});
       `;
-      assert.match(compose('exec', '-T', 'api', 'node', '-e', code), /production-ready/);
+      proof = JSON.parse(compose('exec', '-T', 'api', 'node', '-e', code).trim());
     } else {
       assert.match(compose('exec', '-T', 'web', 'wget', '-qO-', 'http://127.0.0.1:8080/runtime-config.js'), /https:\/\/api.silverbox.test/);
       assert.match(compose('exec', '-T', 'web', 'wget', '-qO-', 'http://127.0.0.1:8080/arquivos'), /<title>Silverbox/);
     }
     const broken = prepare('broken', true);
-    assert.throws(() => release(broken));
+    assert.throws(() => release(broken), /Previous application image restored/);
     assert.equal(readlinkSync(join(root, 'current')), first);
     compose('up', '-d', '--wait', '--wait-timeout', '60');
+    if (proof) {
+      const code = `
+        const assert=require('node:assert/strict');
+        fetch('http://127.0.0.1:8000/files/${proof.id}/download',{headers:{Cookie:${JSON.stringify(proof.cookie)}}})
+          .then(async r=>{assert.equal(r.status,200);assert.equal(await r.text(),'hello');console.log('persistent-bytes-ok')})
+          .catch(e=>{console.error(e);process.exit(1)});
+      `;
+      assert.match(compose('exec', '-T', 'api', 'node', '-e', code), /persistent-bytes-ok/);
+    }
   } finally {
     try { compose('down', '-v', '--remove-orphans'); } finally {
       if (createdNetwork) run('docker', ['network', 'rm', 'traefik']);

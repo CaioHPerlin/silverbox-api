@@ -37,6 +37,29 @@ jobs:
           DEPLOY_USER: ${{ github.actor }}
           DEPLOY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node --test deploy/test/*.test.ts
+      - name: Test private production release on Oracle
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ORACLE_HOST }}
+          SSH_USER: ${{ secrets.ORACLE_USER }}
+          SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ORACLE_KNOWN_HOSTS }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          umask 077
+          key=$(mktemp)
+          hosts=$(mktemp)
+          trap 'rm -f "$key" "$hosts"' EXIT
+          printf '%s\n' "$SSH_KEY" > "$key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$hosts"
+          opts=(-i "$key" -o UserKnownHostsFile="$hosts" -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=15)
+          target="$SSH_USER@$SSH_HOST"
+          check="/home/perlin/silverbox/checks/api/$GITHUB_SHA"
+          ssh "${opts[@]}" "$target" "umask 077; mkdir -p '$check/deploy/test'"
+          scp "${opts[@]}" deploy/compose.yml deploy/release.sh "$target:$check/deploy/"
+          scp "${opts[@]}" deploy/test/release.test.ts deploy/oracle-check.sh "$target:$check/deploy/test/"
+          printf '%s\n' "$GH_TOKEN" | ssh "${opts[@]}" "$target" "bash '$check/deploy/test/oracle-check.sh' '$check' 'api' 'ghcr.io/caiohperlin/silverbox-api:$GITHUB_SHA' '$GITHUB_ACTOR'"
       - name: Deploy immutable release
         if: vars.ORACLE_READY == 'true'
         shell: bash

@@ -10,6 +10,8 @@ Push em `feature/ci-cd` ou `main` executa os gates e publica imagem Linux ARM64 
 
 O ambiente GitHub `oracle` guarda `ORACLE_HOST`, `ORACLE_USER`, `ORACLE_SSH_KEY` e `ORACLE_KNOWN_HOSTS`. Foram cadastradas chaves exclusivas por repositório; a chave pessoal não foi copiada. A identidade SSH é fixada pelo known_hosts, sem `StrictHostKeyChecking=no`. As chaves públicas têm `restrict` (sem encaminhamento ou PTY); o usuário ainda tem os privilégios de Docker da conta `perlin`.
 
+Após publicar, o pipeline executa inicialização e rollback em ARM64 no runner e repete o mesmo teste privado na Oracle: projeto Compose temporário, sem portas publicadas, sem router Traefik e com dados descartáveis. O teste extrai temporariamente o binário Node24 da imagem oficial, sem instalação no sistema, e limpa contêineres, volumes e arquivos próprios ao terminar. Isso não substitui validar DNS, HTTPS e OAuth no domínio final.
+
 **O deploy só é habilitado com a variável `ORACLE_READY=true` no ambiente `oracle`.** Enquanto faltarem os domínios e o `.env`, a imagem é publicada e o passo SSH é pulado. Não habilitar antes da configuração abaixo. Após habilitar, pushes nessas duas branches fazem deploy; remover `feature/ci-cd` da lista de push ao encerrar a homologação. O workflow também aceita disparo manual com `deploy=true` após existir na branch padrão.
 
 ## Preparação

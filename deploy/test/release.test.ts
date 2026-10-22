@@ -18,13 +18,13 @@ test('ARM64 production release becomes healthy and failed replacement restores p
   const project = `silverbox-release-${component}-${process.pid}`;
   let createdNetwork = false;
   const run = (cmd: string, args: string[], input?: string) => execFileSync(cmd, args, {
-    encoding: 'utf8', input, timeout: 240_000, stdio: ['pipe', 'pipe', 'pipe'],
+    encoding: 'utf8', input, env: { ...process.env, IMAGE: image }, timeout: 240_000, stdio: ['pipe', 'pipe', 'pipe'],
   });
   const prepare = (name: string, unhealthy = false) => {
     const dir = join(root, 'releases', name);
     mkdirSync(dir, { recursive: true });
     copyFileSync('deploy/release.sh', join(dir, 'release.sh'));
-    let compose = readFileSync('deploy/compose.yml', 'utf8').replace(`name: silverbox-${component}`, `name: ${project}`);
+    let compose = readFileSync('deploy/compose.yml', 'utf8').replace(`name: silverbox-${component}`, `name: ${project}`).replace("traefik.enable: 'true'", "traefik.enable: 'false'");
     if (unhealthy) {
       if (component === 'api') {
         compose = compose.replace(/test: \['CMD', 'node', '-e', .*?\]/, "test: ['CMD', 'false']")

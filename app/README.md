@@ -113,3 +113,7 @@ docker compose up -d --wait api
 ```
 
 Restaure banco e diretório do mesmo conjunto, com a API parada, antes de reiniciar. Use `pg_restore` para o banco e extraia o arquivo no volume de arquivos vazio, preservando UID/GID do usuário de serviço. Verifique `/health/ready`, `/storage/usage` e o download de um arquivo conhecido. Banco sem arquivos perde os bytes; arquivos sem banco perdem propriedade, versões e compartilhamentos.
+
+## Oracle e CI/CD
+
+A configuração de produção e o fluxo de deploy ficam em [../deploy/README.md](../deploy/README.md). O Compose local acima continua independente da Oracle.

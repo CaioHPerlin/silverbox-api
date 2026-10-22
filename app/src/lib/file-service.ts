@@ -3,15 +3,9 @@ import type { Readable } from 'node:stream'
 import type { Prisma, File, FileVersion } from '@prisma/client'
 import { prisma } from './prisma.js'
 import { storage } from './storage.js'
-
-export class HttpError extends Error {
-	constructor(
-		public readonly status: number,
-		message: string,
-	) {
-		super(message)
-	}
-}
+import { env } from '../config/env.js'
+import { HttpError } from './errors.js'
+export { HttpError } from './errors.js'
 
 type Transaction = Prisma.TransactionClient
 
@@ -78,7 +72,36 @@ async function reserve(userId: number, sizeBytes: bigint) {
 	const id = randomUUID()
 	const storageKey = `objects/${userId}/${randomUUID()}`
 	await prisma.$transaction(async (tx) => {
+		// Every writer takes the global lock before the user lock.
+		await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(714923, 1)`
 		await lockUser(tx, userId)
+		const [versions, reservations, count, userCount] = await Promise.all([
+			tx.fileVersion.aggregate({ _sum: { sizeBytes: true } }),
+			tx.uploadReservation.aggregate({ _sum: { sizeBytes: true } }),
+			tx.uploadReservation.count(),
+			tx.uploadReservation.count({ where: { userId } }),
+		])
+		if (count >= env.STORAGE_MAX_TRANSFERS || userCount >= env.STORAGE_MAX_USER_TRANSFERS)
+			throw new HttpError(429, 'Too many simultaneous transfers')
+		const reserved = reservations._sum.sizeBytes ?? 0n
+		if ((versions._sum.sizeBytes ?? 0n) + reserved + sizeBytes > env.STORAGE_MAX_BYTES)
+			throw new HttpError(507, 'Global storage limit exceeded')
+		let capacity
+		try {
+			capacity = await storage.capacity()
+		} catch {
+			throw new HttpError(503, 'Storage capacity is unavailable')
+		}
+		const percentMargin =
+			(capacity.totalBytes * BigInt(Math.ceil(env.STORAGE_MIN_FREE_PERCENT * 100))) / 10000n
+		const margin =
+			percentMargin > env.STORAGE_MIN_FREE_BYTES ? percentMargin : env.STORAGE_MIN_FREE_BYTES
+		if (
+			capacity.availableBytes - reserved - sizeBytes < margin ||
+			(capacity.totalInodes > 0n &&
+				capacity.freeInodes - BigInt(count * 2 + 2) < env.STORAGE_MIN_FREE_INODES)
+		)
+			throw new HttpError(507, 'Storage safety margin reached')
 		const current = await usage(userId, tx)
 		if (sizeBytes > current.available) throw new HttpError(413, 'Storage quota exceeded')
 		await tx.uploadReservation.create({
@@ -104,13 +127,14 @@ export async function withStoredBytes<T>(
 	let checksum: string
 	try {
 		if ('copyFrom' in input) {
-			await storage.copy(input.copyFrom, reservation.storageKey)
+			await storage.copy(input.copyFrom, reservation.storageKey, sizeBytes, input.checksum)
 			checksum = input.checksum
 		} else {
 			checksum = await storage.write(input, reservation.stagedKey, sizeBytes)
 			await storage.commit(reservation.stagedKey, reservation.storageKey)
 		}
 		return await prisma.$transaction(async (tx) => {
+			await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(714923, 1)`
 			await lockUser(tx, userId)
 			const value = await commit(tx, reservation.storageKey, checksum)
 			await tx.uploadReservation.delete({ where: { id: reservation.id } })
@@ -130,6 +154,8 @@ export async function withStoredBytes<T>(
 		) {
 			throw new HttpError(400, error.message)
 		}
+		if (['ENOSPC', 'EDQUOT'].includes((error as NodeJS.ErrnoException).code ?? ''))
+			throw new HttpError(507, 'Storage is full')
 		throw error
 	}
 }

@@ -71,3 +71,29 @@ Base local: `http://localhost:8000`. Rotas privadas exigem o cookie de sessão B
 Em 8 de outubro de 2026, com PostgreSQL 18 temporário e diretórios de arquivos temporários, a migração desde um banco vazio, `pnpm build` e `pnpm test` passaram: **5 testes, 5 aprovados**. Os testes cobriram bytes e SHA-256 idênticos após download, isolamento entre usuários, pastas e ciclos, versões, restauração, links e revogação, lixeira, exclusão definitiva, cota sob uploads concorrentes, upload interrompido, auditoria, validação do ambiente e reconciliação após reinício. Uma instalação npm isolada também passou por `npm ci`, `npm run db:generate` e `npm run build`.
 
 O Compose com PostgreSQL não iniciou neste host porque o daemon não conseguiu criar as interfaces de rede do contêiner (`operation not supported`). A verificação acima usou PostgreSQL local temporário. Essa limitação do host não altera o arquivo Compose; a inicialização por Compose deve ser verificada em uma máquina com rede Docker funcional.
+
+## Complementos da entrega de 22/10/2026
+
+**`GET /`** → Corpo: nenhum. → Resposta `200`: `{"message":"Hello, World"}`.
+
+**`GET /health/live`** → Corpo: nenhum. → Resposta `200`: `{"status":"ok"}`; indica processo ativo.
+
+**`GET /health/ready`** → Corpo: nenhum. → Resposta `200`: `{"status":"ok"}` quando banco e armazenamento privado estão disponíveis; `503`: `{"status":"unavailable"}` em falha de dependência, sem expor caminhos ou credenciais.
+
+**`POST /api/auth/sign-up/email`** → Corpo: mesmo JSON de `/auth/register`. → Resposta `200`: usuário/token e cookie HttpOnly, conforme contrato nativo Better Auth.
+
+**`POST /api/auth/sign-in/email`** → Corpo: mesmo JSON de `/auth/login`. → Resposta `200`: usuário/token e cookie HttpOnly.
+
+**`POST /api/auth/sign-out`** → Corpo: `{}` com cookie e `Origin` confiável. → Resposta `200`: `{"success":true}`.
+
+**`GET /api/auth/get-session`** → Corpo: nenhum; cookie opcional. → Resposta `200`: `{"user":{...},"session":{...}}` ou `null` sem sessão.
+
+**`GET /api/auth/callback/google?code=...&state=...`** → Corpo: nenhum; chamado pelo Google com o cookie de estado do navegador que iniciou o fluxo. → Resposta `302` com `Location` e, em sucesso, sessão. O callback de erro também redireciona; o teste negativo usa `error=access_denied`, sem fabricar consentimento ou código real.
+
+**`GET /auth/google` sem credenciais configuradas** → Corpo: nenhum. → Resposta `400`: `{"error":"Google sign-in is not configured"}`. O login por senha não depende do Google.
+
+**`POST /files`**, **`POST /files/:id/versions`** e **`POST /files/:id/versions/:versionId/restore`** → Corpo conforme cada endpoint acima. → Além dos resultados documentados: `429` com `Retry-After: 1` e `{"error":"Too many simultaneous transfers"}` para excesso de concorrência; `507` para teto global, margem livre/inodes ou disco cheio; `503` se não for possível verificar o armazenamento. A recusa ocorre antes de receber novos bytes quando detectável antecipadamente. Lixeira e versões continuam contabilizadas.
+
+**Requisição com `Origin` não permitido** → Corpo conforme a operação. → Resposta `403`: `{"error":"Origin is not allowed"}`. Origens locais padrão: `http://localhost:5173` e `http://localhost:3000`. O front deve usar `credentials: 'include'`. Os preflights permitidos respondem `204` com origem explícita e credenciais, sem wildcard.
+
+O Swagger em `/docs` e `/docs.json` contém schemas completos, respostas binárias e cabeçalhos. As evidências atuais estão em [validacao-2026-10-22.md](validacao-2026-10-22.md); o registro de 08/10 acima é histórico.

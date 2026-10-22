@@ -30,13 +30,59 @@ const envSchema = z
 		STORAGE_ROOT: z
 			.string()
 			.refine(isAbsolute, 'STORAGE_ROOT must be an absolute path')
-			.default(resolve(process.cwd(), '.data')),
+			.optional(),
+		STORAGE_MAX_BYTES: z.coerce.bigint().positive().optional(),
+		STORAGE_MIN_FREE_BYTES: z.coerce.bigint().nonnegative().default(5368709120n),
+		STORAGE_MIN_FREE_PERCENT: z.coerce.number().min(0).max(100).default(10),
+		STORAGE_MIN_FREE_INODES: z.coerce.bigint().nonnegative().default(1024n),
+		STORAGE_MAX_TRANSFERS: z.coerce.number().int().positive().default(4),
+		STORAGE_MAX_USER_TRANSFERS: z.coerce.number().int().positive().default(2),
+		FRONTEND_ORIGINS: z
+			.string()
+			.default('http://localhost:5173,http://localhost:3000')
+			.transform((value) =>
+				value
+					.split(',')
+					.map((origin) => origin.trim())
+					.filter(Boolean),
+			)
+			.pipe(
+				z.array(
+					z.url().refine((value) => {
+						const url = new URL(value)
+						return /^https?:$/.test(url.protocol) && url.origin === value
+					}, 'Use an HTTP(S) origin without a trailing slash'),
+				),
+			),
 		MAX_UPLOAD_BYTES: z.coerce.number().int().positive().max(1073741824).default(1073741824),
 	})
 	.refine((value) => Boolean(value.GOOGLE_CLIENT_ID) === Boolean(value.GOOGLE_CLIENT_SECRET), {
 		message: 'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together',
 		path: ['GOOGLE_CLIENT_ID'],
 	})
+	.superRefine((value, context) => {
+		if (value.NODE_ENV === 'production') {
+			for (const key of ['STORAGE_ROOT', 'STORAGE_MAX_BYTES'] as const) {
+				if (value[key] === undefined)
+					context.addIssue({
+						code: 'custom',
+						path: [key],
+						message: `${key} is required in production`,
+					})
+			}
+		}
+		if (value.STORAGE_MAX_USER_TRANSFERS > value.STORAGE_MAX_TRANSFERS)
+			context.addIssue({
+				code: 'custom',
+				path: ['STORAGE_MAX_USER_TRANSFERS'],
+				message: 'Cannot exceed STORAGE_MAX_TRANSFERS',
+			})
+	})
+	.transform((value) => ({
+		...value,
+		STORAGE_ROOT: value.STORAGE_ROOT ?? resolve(process.cwd(), '.data'),
+		STORAGE_MAX_BYTES: value.STORAGE_MAX_BYTES ?? 10737418240n,
+	}))
 
 function loadEnv() {
 	const result = envSchema.safeParse(process.env)

@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import pg from 'pg'
+import { assertOperationsCovered, validateHttpContracts } from './contracts.js'
 
 const baseURL = 'http://127.0.0.1:18001'
 const headers = { Origin: baseURL, 'Content-Type': 'application/json' }
@@ -83,6 +84,24 @@ test('folders, versions, sharing, trash, quota and binary round-trip work togeth
 	const root = await mkdtemp(join(tmpdir(), 'silverbox-files-'))
 	const server = await startServer(root)
 	try {
+		await validateHttpContracts(baseURL)
+		assert.equal((await fetch(`${baseURL}/health/ready`)).status, 200)
+		const preflight = await fetch(`${baseURL}/files`, {
+			method: 'OPTIONS',
+			headers: {
+				Origin: 'http://localhost:5173',
+				'Access-Control-Request-Method': 'POST',
+				'Access-Control-Request-Headers': 'content-type,x-file-size,x-file-name',
+			},
+		})
+		assert.equal(preflight.status, 204)
+		assert.equal(preflight.headers.get('access-control-allow-origin'), 'http://localhost:5173')
+		assert.equal(preflight.headers.get('access-control-allow-credentials'), 'true')
+		assert.equal(
+			(await fetch(`${baseURL}/users/me`, { headers: { Origin: 'https://untrusted.example' } }))
+				.status,
+			403,
+		)
 		const spec = (await (await fetch(`${baseURL}/docs.json`)).json()) as {
 			servers: unknown[]
 			paths: Record<string, unknown>
@@ -102,6 +121,11 @@ test('folders, versions, sharing, trash, quota and binary round-trip work togeth
 		})
 		assert.equal(childResponse.status, 201)
 		const child = (await childResponse.json()).folder as { id: number }
+		assert.equal(
+			(await jsonRequest(`/folders/${child.id}`, 'PATCH', alice.cookie, { name: 'Renomeada' }))
+				.status,
+			200,
+		)
 		const folders = (await (
 			await fetch(`${baseURL}/folders?parentFolderId=${folder.id}`, {
 				headers: { Cookie: alice.cookie },
@@ -136,6 +160,10 @@ test('folders, versions, sharing, trash, quota and binary round-trip work togeth
 		assert.equal(created.status, 201)
 		const file = (await created.json()).file as { id: number; checksum: string }
 		assert.equal(file.checksum, createHash('sha256').update(first).digest('hex'))
+		const listing = await fetch(`${baseURL}/files?folderId=${folder.id}`, {
+			headers: { Cookie: alice.cookie },
+		})
+		assert.equal(listing.status, 200)
 		const metadata = (await (
 			await fetch(`${baseURL}/files/${file.id}`, { headers: { Cookie: alice.cookie } })
 		).json()) as { file: { originalName: string } }
@@ -282,6 +310,30 @@ test('folders, versions, sharing, trash, quota and binary round-trip work togeth
 		)
 		assert.equal((await jsonRequest(`/folders/${child.id}`, 'DELETE', alice.cookie)).status, 204)
 		assert.equal((await jsonRequest(`/folders/${folder.id}`, 'DELETE', alice.cookie)).status, 204)
+		assertOperationsCovered([
+			'GET /folders',
+			'POST /folders',
+			'PATCH /folders/{id}',
+			'DELETE /folders/{id}',
+			'GET /storage/usage',
+			'POST /files',
+			'GET /files',
+			'GET /files/trash',
+			'GET /files/{id}',
+			'PATCH /files/{id}',
+			'DELETE /files/{id}',
+			'GET /files/{id}/download',
+			'POST /files/{id}/restore',
+			'DELETE /files/{id}/permanent',
+			'POST /files/{id}/versions',
+			'GET /files/{id}/versions',
+			'GET /files/{id}/versions/{versionId}/download',
+			'POST /files/{id}/versions/{versionId}/restore',
+			'POST /files/{id}/shares',
+			'GET /files/{id}/shares',
+			'DELETE /files/{id}/shares/{shareId}',
+			'GET /shares/{token}',
+		])
 	} finally {
 		await stopServer(server)
 		await rm(root, { recursive: true, force: true })
@@ -340,7 +392,7 @@ test('concurrent uploads cannot exceed quota; failed upload leaves no reservatio
 			"INSERT INTO silverbox_api.upload_reservations (id, userid, storagekey, sizebytes, expiresat) VALUES ($1, $2, $3, 1, now() + interval '1 hour')",
 			[reservationId, Number(alice.user.id), key],
 		)
-		await writeFile(join(root, 'staging', reservationId), 'x')
+		await writeFile(join(root, 'staging', reservationId), 'x', { mode: 0o600 })
 		await stopServer(server)
 		server = await startServer(root)
 		const count = await database.query(

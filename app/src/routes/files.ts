@@ -48,6 +48,12 @@ const fileChangeSchema = z
 		folderId: z.number().int().positive().nullable().optional(),
 	})
 	.strict()
+const folderChangeSchema = z
+	.object({
+		name: nameSchema.optional(),
+		parentFolderId: z.number().int().positive().nullable().optional(),
+	})
+	.strict()
 
 function id(value: string | string[] | undefined): number {
 	const result = Number(value)
@@ -104,7 +110,7 @@ async function sendDownload(
 	res.setHeader('Content-Length', size.toString())
 	res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`)
 	try {
-		await pipeline(storage.read(storageKey), res)
+		await pipeline(await storage.read(storageKey), res)
 	} catch (error) {
 		if (res.headersSent) res.destroy(error as Error)
 		else throw error
@@ -144,7 +150,7 @@ foldersRouter.patch(
 	route(async (req, res) => {
 		const owner = await userId(req)
 		const folderId = id(req.params.id)
-		const body = folderSchema.partial().strict().parse(req.body)
+		const body = folderChangeSchema.parse(req.body)
 		if (Object.keys(body).length === 0) throw new HttpError(400, 'No changes provided')
 		const folder = await prisma.folder.findFirst({ where: { id: folderId, userId: owner } })
 		if (!folder) throw new HttpError(404, 'Folder not found')

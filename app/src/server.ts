@@ -3,9 +3,14 @@ import { env } from './config/env.js'
 import { prisma } from './lib/prisma.js'
 import { storage } from './lib/storage.js'
 import { reconcileStorage } from './lib/file-service.js'
+import { acquireStorageLock } from './lib/storage-lock.js'
 
 async function bootstrap(): Promise<void> {
 	await storage.init()
+	const releaseStorageLock = await acquireStorageLock((error) => {
+		console.error('[STORAGE] Exclusive lock lost:', error)
+		process.exit(1)
+	})
 	await reconcileStorage(true)
 	const reconciliation = setInterval(() => {
 		void reconcileStorage().catch((error: unknown) =>
@@ -29,7 +34,9 @@ async function bootstrap(): Promise<void> {
 				process.exit(1)
 			}
 
-			void prisma.$disconnect().finally(() => process.exit(0))
+			void prisma
+				.$disconnect()
+				.finally(() => releaseStorageLock().finally(() => process.exit(0)))
 		})
 	}
 	process.once('SIGTERM', () => shutdown('SIGTERM'))

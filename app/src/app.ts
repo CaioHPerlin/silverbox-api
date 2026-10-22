@@ -9,6 +9,9 @@ import { filesRouter, foldersRouter, sharesRouter, storageRouter } from './route
 import { HttpError } from './lib/file-service.js'
 import { ZodError } from 'zod'
 import type { NextFunction, Request, Response } from 'express'
+import { corsMiddleware } from './middleware/cors.js'
+import { prisma } from './lib/prisma.js'
+import { storage } from './lib/storage.js'
 
 export function createApp(): Application {
 	const app = express()
@@ -16,7 +19,20 @@ export function createApp(): Application {
 	// Middleware
 	app.set('trust proxy', 1)
 	app.use(loggerMiddleware)
+	app.use(corsMiddleware)
 	app.disable('x-powered-by')
+	app.get('/health/live', (_req, res) => {
+		res.json({ status: 'ok' })
+	})
+	app.get('/health/ready', async (_req, res) => {
+		try {
+			await prisma.$queryRaw`SELECT 1`
+			await storage.capacity()
+			res.json({ status: 'ok' })
+		} catch {
+			res.status(503).json({ status: 'unavailable' })
+		}
+	})
 	app.all('/api/auth/*splat', toNodeHandler(auth))
 	app.use(express.json())
 	app.use('/auth', authRouter)
@@ -26,7 +42,11 @@ export function createApp(): Application {
 	app.use('/shares', sharesRouter)
 	app.use('/storage', storageRouter)
 
-	app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
+	app.use(
+		'/docs',
+		swaggerUi.serve,
+		swaggerUi.setup(swaggerSpec, { swaggerOptions: { withCredentials: true } }),
+	)
 
 	// Routes
 	app.get('/', (_, res) => {
@@ -40,7 +60,12 @@ export function createApp(): Application {
 	app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
 		if (res.headersSent) return
 		if (error instanceof HttpError) {
+			if (error.status === 429) res.setHeader('Retry-After', '1')
 			res.status(error.status).json({ error: error.message })
+			return
+		}
+		if (error instanceof SyntaxError && 'status' in error && error.status === 400) {
+			res.status(400).json({ error: 'Invalid JSON' })
 			return
 		}
 		if (error instanceof ZodError) {

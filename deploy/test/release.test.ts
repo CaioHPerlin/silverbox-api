@@ -9,10 +9,10 @@ const component = process.env.DEPLOY_COMPONENT;
 const image = process.env.DEPLOY_IMAGE;
 const token = process.env.DEPLOY_TOKEN;
 const username = process.env.DEPLOY_USER;
-const enabled = !!(component && image && token && username);
 
 test('ARM64 production release becomes healthy and failed replacement restores previous release',
-  { skip: !enabled, timeout: 480_000 }, () => {
+  { timeout: 480_000 }, () => {
+  assert.ok(component && image && token && username, 'All DEPLOY_* variables are required; this check must never be skipped');
   assert.ok(component === 'api' || component === 'web');
   const root = mkdtempSync(join(tmpdir(), 'silverbox-release-'));
   const project = `silverbox-release-${component}-${process.pid}`;

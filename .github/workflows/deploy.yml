@@ -32,7 +32,7 @@ jobs:
           cache-to: type=gha,mode=max
       - name: Test production startup and rollback on ARM64
         env:
-          DEPLOY_api: api
+          DEPLOY_COMPONENT: api
           DEPLOY_IMAGE: ghcr.io/caiohperlin/silverbox-api:${{ github.sha }}
           DEPLOY_USER: ${{ github.actor }}
           DEPLOY_TOKEN: ${{ secrets.GITHUB_TOKEN }}

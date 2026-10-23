@@ -83,3 +83,8 @@ jobs:
           ssh "${opts[@]}" "$target" "mkdir -p '$release' && chmod 700 '$release'"
           scp "${opts[@]}" deploy/compose.yml deploy/release.sh "$target:$release/"
           printf '%s' "$GH_TOKEN" | ssh "${opts[@]}" "$target" "bash '$release/release.sh' 'ghcr.io/caiohperlin/silverbox-api:$GITHUB_SHA' '$GITHUB_ACTOR'"
+      - name: Verify public HTTPS with normal DNS
+        if: vars.ORACLE_READY == 'true'
+        env:
+          DEPLOY_COMPONENT: api
+        run: node --test deploy/public.test.ts

@@ -5,6 +5,7 @@
 *.crt
 
 # Dados locais
+dados/
 *.sqlite3
 *.db
 

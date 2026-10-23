@@ -1,6 +1,3 @@
--- LEGADO: esquema de referência, não usado pela API atual.
--- A fonte de verdade é app/src/prisma/schema.prisma e suas migrations.
--- Não execute este arquivo no banco usado pelo Silverbox API.
 -- Esquema MÍNIMO de partida do projeto "Minha Nuvem".
 -- Isto é um ponto de partida, não a resposta: adapte, renomeie e expanda
 -- conforme as suas decisões de projeto. Você precisa saber explicar cada tabela.

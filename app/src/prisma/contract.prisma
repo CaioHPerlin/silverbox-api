@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["silverbox-api"]
+}
+
+model User {
+  id              Int       @id(map: "pk_users") @default(autoincrement())
+  name            String    @db.VarChar(155)
+  email           String?   @unique(map: "email_unq") @db.VarChar(155)
+  emailVerified   Boolean   @default(false) @map("emailverified")
+  image           String?   @db.VarChar
+  userRole        String    @map("user_role") @db.VarChar
+  quotaLimitBytes BigInt    @map("quotalimitbytes")
+  createdAt       DateTime  @default(now()) @map("createdat") @db.Timestamp
+  updatedAt       DateTime? @updatedAt @map("updatedat") @db.Timestamp
+
+  sessions    Session[]
+  accounts    Account[]
+  folders     Folder[]
+  files       File[]
+  sharedLinks SharedLink[]
+  auditLogs   AuditLog[]
+
+  @@map("users")
+  @@schema("silverbox-api")
+}
+
+model Session {
+  id        Int      @id(map: "pk_tbl") @default(autoincrement())
+  userId    Int      @map("userid")
+  token     String   @unique(map: "token_unq") @db.VarChar
+  expiresAt DateTime @map("expiresat") @db.Timestamp
+  ipAddress String?  @map("ipaddress") @db.VarChar
+  userAgent String?  @map("useragent") @db.VarChar
+  createdAt DateTime @default(now()) @map("createdat") @db.Timestamp
+  updatedAt DateTime @updatedAt @map("updatedat") @db.Timestamp
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "userid")
+
+  @@map("session")
+  @@schema("silverbox-api")
+}
+
+model Account {
+  id                    Int       @id(map: "pk_account") @default(autoincrement())
+  userId                Int       @map("userid")
+  accountId             String    @map("accountid") @db.VarChar
+  providerId            String    @map("providerid") @db.VarChar
+  password              String?   @db.VarChar(255)
+  accessToken           String?   @map("accesstoken") @db.VarChar
+  refreshToken          String?   @map("refreshtoken") @db.VarChar
+  idToken               String?   @map("idtoken") @db.VarChar
+  accessTokenExpiresAt  DateTime? @map("accesstokenexpiresat") @db.Timestamp
+  refreshTokenExpiresAt DateTime? @map("refreshtokenexpiresat") @db.Timestamp
+  createdAt             DateTime  @default(now()) @map("createdat") @db.Timestamp
+  updatedAt             DateTime  @updatedAt @map("updatedat") @db.Timestamp
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "userid")
+
+  @@map("account")
+  @@schema("silverbox-api")
+}
+
+model Verification {
+  id         Int      @id(map: "pk_verification") @default(autoincrement())
+  identifier String   @db.VarChar
+  value      String   @db.VarChar
+  expiresAt  DateTime @map("expiresat") @db.Timestamp
+  createdAt  DateTime @default(now()) @map("createdat") @db.Timestamp
+  updatedAt  DateTime @updatedAt @map("updatedat") @db.Timestamp
+
+  @@map("verification")
+  @@schema("silverbox-api")
+}
+
+model Folder {
+  id             Int      @id(map: "pk_folders") @default(autoincrement())
+  userId         Int      @map("userid")
+  parentFolderId Int?     @map("parentfolderid")
+  name           String   @db.VarChar
+  createdAt      DateTime @default(now()) @map("createdat") @db.Timestamp
+  updatedAt      DateTime @updatedAt @map("updatedat") @db.Timestamp
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "userid")
+  parent   Folder?  @relation("FolderHierarchy", fields: [parentFolderId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "fk_folders_folders")
+  children Folder[] @relation("FolderHierarchy")
+  files    File[]
+
+  @@map("folders")
+  @@schema("silverbox-api")
+}
+
+model File {
+  id           Int       @id(map: "pk_files") @default(autoincrement())
+  userId       Int       @map("userid")
+  folderId     Int       @map("folderid")
+  originalName String    @map("originalname") @db.VarChar
+  storageKey   String    @map("storagekey") @db.VarChar
+  sizeBytes    BigInt    @map("sizebytes")
+  mimeType     String    @map("mimetype") @db.VarChar
+  checksum     String    @db.VarChar
+  isDeleted    Boolean   @default(false) @map("isdeleted")
+  deletedAt    DateTime? @map("deletedat") @db.Timestamp
+  createdAt    DateTime  @default(now()) @map("createdat") @db.Timestamp
+  updatedAt    DateTime  @updatedAt @map("updatedat") @db.Timestamp
+
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "fk_files_users")
+  folder      Folder        @relation(fields: [folderId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "fk_files_folders")
+  versions    FileVersion[]
+  sharedLinks SharedLink[]
+
+  @@map("files")
+  @@schema("silverbox-api")
+}
+
+model FileVersion {
+  id            Int      @id(map: "pk_file_versions") @default(autoincrement())
+  fileId        Int      @map("fileid")
+  storageKey    String   @map("storagekey") @db.VarChar
+  versionNumber Int      @map("versionnumber")
+  sizeBytes     BigInt   @map("sizebytes")
+  checksum      String   @db.VarChar
+  createdAt     DateTime @default(now()) @map("createdat") @db.Timestamp
+
+  file File @relation(fields: [fileId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "fk_file_versions_files")
+
+  @@map("file_versions")
+  @@schema("silverbox-api")
+}
+
+model SharedLink {
+  id        Int      @id(map: "pk_shared_links") @default(autoincrement())
+  fileId    Int      @map("fileid")
+  userId    Int      @map("userid")
+  token     String   @unique(map: "token_link_unq") @db.VarChar
+  expiresAt DateTime @map("expiresat") @db.Timestamp
+  createdAt DateTime @default(now()) @map("createdat") @db.Timestamp
+
+  // No diagrama esta FK não tem ON DELETE/UPDATE definidos (padrão NO ACTION)
+  file File @relation(fields: [fileId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fileid")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "userid")
+
+  @@map("shared_links")
+  @@schema("silverbox-api")
+}
+
+model AuditLog {
+  id        Int      @id(map: "pk_audit_logs") @default(autoincrement())
+  userId    Int      @map("userid")
+  action    String   @db.VarChar
+  ipAddress String   @map("ipaddress") @db.VarChar
+  details   String?  @db.VarChar
+  createdAt DateTime @default(now()) @map("createdat") @db.Timestamp
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "userid")
+
+  @@map("audit_logs")
+  @@schema("silverbox-api")
+}

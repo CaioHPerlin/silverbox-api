@@ -41,3 +41,11 @@ Backup consistente: bloquear novas gravações/parar a API, gerar dump PostgreSQ
 ## Limites da entrega
 
 Deploy não integra automaticamente as telas de arquivos do web: várias ainda usam dados simulados e o helper multipart não corresponde ao upload binário da API. O pipeline valida a publicação do frontend e sua configuração de autenticação. O consentimento Google real exige a conta e configuração do usuário e deve ser verificado no domínio final.
+
+## Domínios desta instância
+
+- Web: `https://silverbox.perlin.com.br`
+- API: `https://api.silverbox.perlin.com.br`
+- Callback Google: `https://api.silverbox.perlin.com.br/api/auth/callback/google`
+
+Os registros A devem apontar para `152.67.57.175`. O deploy público exige DNS confirmado para cada serviço; os segredos ficam somente no `.env` privado da Oracle.

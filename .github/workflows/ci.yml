@@ -1,0 +1,138 @@
+name: CI
+
+on:
+  push:
+    branches: [main, feature/ci-cd]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy this revision to Oracle after validation
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: nuvem
+          POSTGRES_PASSWORD: changeme
+          POSTGRES_DB: nuvem
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nuvem -d nuvem"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 15
+
+    env:
+      DATABASE_URL: postgresql://nuvem:changeme@127.0.0.1:5432/nuvem
+      BETTER_AUTH_URL: http://127.0.0.1:18000
+      BETTER_AUTH_SECRET: 0123456789abcdef0123456789abcdef
+      GOOGLE_CLIENT_ID: silverbox-ci.apps.googleusercontent.com
+      GOOGLE_CLIENT_SECRET: silverbox-ci-secret
+      PORT: 18000
+
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm db:generate
+
+      - name: Migrate database
+        run: pnpm db:migrate
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
+
+  npm-compat:
+    name: npm compatibility
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        env:
+          DATABASE_URL: postgresql://localhost:5432/silverbox_ci
+        run: npm run db:generate
+
+      - name: Build
+        run: npm run build
+
+  docker:
+    name: Docker startup and persistence
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: pnpm install --frozen-lockfile
+        working-directory: app
+      - run: pnpm test:docker
+        working-directory: app
+
+  deploy:
+    needs: [build-and-test, npm-compat, docker]
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy)
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit

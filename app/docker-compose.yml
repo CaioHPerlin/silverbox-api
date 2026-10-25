@@ -1,0 +1,57 @@
+name: silverbox-api-dev
+
+services:
+  api:
+    build: .
+    init: true
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 8000
+      DATABASE_URL: postgresql://nuvem:changeme@db:5432/nuvem
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:8000}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-silverbox-local-development-secret-change-in-production}
+      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      STORAGE_ROOT: /var/lib/silverbox/files
+      STORAGE_MAX_BYTES: ${STORAGE_MAX_BYTES:-10737418240}
+      STORAGE_MIN_FREE_BYTES: ${STORAGE_MIN_FREE_BYTES:-5368709120}
+      STORAGE_MIN_FREE_PERCENT: ${STORAGE_MIN_FREE_PERCENT:-10}
+      STORAGE_MIN_FREE_INODES: ${STORAGE_MIN_FREE_INODES:-1024}
+      STORAGE_MAX_TRANSFERS: ${STORAGE_MAX_TRANSFERS:-4}
+      STORAGE_MAX_USER_TRANSFERS: ${STORAGE_MAX_USER_TRANSFERS:-2}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-1073741824}
+    ports:
+      - '127.0.0.1:8000:8000'
+    volumes:
+      - silverbox_file_data:/var/lib/silverbox/files
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:8000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nuvem
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: nuvem
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - silverbox_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U nuvem -d nuvem']
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+volumes:
+  silverbox_db_data:
+  silverbox_file_data:

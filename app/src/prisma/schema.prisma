@@ -14,6 +14,9 @@ model User {
   emailVerified   Boolean   @default(false) @map("emailverified")
   image           String?   @db.VarChar
   userRole        String    @default("user") @map("user_role") @db.VarChar
+  banned          Boolean?  @default(false)
+  banReason       String?   @map("banreason") @db.VarChar
+  banExpires      DateTime? @map("banexpires") @db.Timestamp
   quotaLimitBytes BigInt    @default(1073741824) @map("quotalimitbytes")
   createdAt       DateTime  @default(now()) @map("createdat") @db.Timestamp
   updatedAt       DateTime  @updatedAt @map("updatedat") @db.Timestamp
@@ -36,6 +39,7 @@ model Session {
   expiresAt DateTime @map("expiresat") @db.Timestamp
   ipAddress String?  @map("ipaddress") @db.VarChar
   userAgent String?  @map("useragent") @db.VarChar
+  impersonatedBy String? @map("impersonatedby") @db.VarChar
   createdAt DateTime @default(now()) @map("createdat") @db.Timestamp
   updatedAt DateTime @updatedAt @map("updatedat") @db.Timestamp
 

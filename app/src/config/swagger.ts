@@ -72,6 +72,13 @@ const swaggerOptions: swaggerJsdoc.Options = {
 							format: 'email',
 							example: 'usuario@email.com',
 						},
+
+						role: {
+							type: 'string',
+							enum: ['admin', 'user'],
+							description: 'Perfil do usuário. Novos cadastros sempre começam como user.',
+							example: 'user',
+						},
 					},
 				},
 

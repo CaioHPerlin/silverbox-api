@@ -2,13 +2,22 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/ci-cd]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy this revision to Oracle after validation
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-and-test:
@@ -102,3 +111,28 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  docker:
+    name: Docker startup and persistence
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: pnpm install --frozen-lockfile
+        working-directory: app
+      - run: pnpm test:docker
+        working-directory: app
+
+  deploy:
+    needs: [build-and-test, npm-compat, docker]
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy)
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit

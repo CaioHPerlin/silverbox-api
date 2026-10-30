@@ -70,25 +70,34 @@ authRouter.post('/logout', (req, res, next) =>
 	),
 )
 
-authRouter.get('/google', (req, res, next) =>
-	sendAuthResult(
-		res,
-		next,
-		() =>
-			auth.api.signInSocial({
-				body: { provider: 'google', callbackURL: env.BETTER_AUTH_URL },
-				headers: fromNodeHeaders(req.headers),
-				returnHeaders: true,
-			}),
-		(response) => {
-			const { url } = response as { url?: string }
-			if (!url) {
-				res.status(502).json({ error: 'Google sign-in did not return an authorization URL' })
-				return
-			}
-			res.redirect(302, url)
-		},
-	),
+authRouter.get(
+	'/google',
+	(_req, res, next) => {
+		if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+			res.status(400).json({ error: 'Google sign-in is not configured' })
+			return
+		}
+		next()
+	},
+	(req, res, next) =>
+		sendAuthResult(
+			res,
+			next,
+			() =>
+				auth.api.signInSocial({
+					body: { provider: 'google', callbackURL: env.BETTER_AUTH_URL },
+					headers: fromNodeHeaders(req.headers),
+					returnHeaders: true,
+				}),
+			(response) => {
+				const { url } = response as { url?: string }
+				if (!url) {
+					res.status(502).json({ error: 'Google sign-in did not return an authorization URL' })
+					return
+				}
+				res.redirect(302, url)
+			},
+		),
 )
 
 usersRouter.get('/me', async (req: Request, res: Response, next: NextFunction) => {

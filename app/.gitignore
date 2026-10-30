@@ -19,3 +19,6 @@ bun.lockb
 .idea/
 .DS_Store
 /generated/prisma
+.data/
+silverbox-db*.dump
+silverbox-files*.tar.gz

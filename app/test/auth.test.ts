@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import { test } from 'node:test'
 import pg from 'pg'
+import { assertOperationsCovered, validateHttpContracts } from './contracts.js'
 
 const baseURL = process.env.BETTER_AUTH_URL ?? 'http://127.0.0.1:18000'
 
@@ -30,6 +31,11 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async () 
 
 	try {
 		await waitForServer(server)
+		await validateHttpContracts(baseURL)
+		assert.equal((await fetch(`${baseURL}/`)).status, 200)
+		assert.equal((await fetch(`${baseURL}/health/live`)).status, 200)
+		assert.equal((await fetch(`${baseURL}/health/ready`)).status, 200)
+		assert.equal((await fetch(`${baseURL}/docs`)).status, 200)
 		const email = `auth-${randomUUID()}@example.com`
 		const signup = await fetch(`${baseURL}/auth/register`, {
 			method: 'POST',
@@ -85,6 +91,49 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async () 
 			body: JSON.stringify({ email, password: 'correct-horse-battery-staple' }),
 		})
 		assert.equal(signin.status, 200)
+		const nativeEmail = `native-${randomUUID()}@example.com`
+		const frontHeaders = { Origin: 'http://localhost:5173', 'Content-Type': 'application/json' }
+		const nativeSignup = await fetch(`${baseURL}/api/auth/sign-up/email`, {
+			method: 'POST',
+			headers: frontHeaders,
+			body: JSON.stringify({
+				name: 'Front User',
+				email: nativeEmail,
+				password: 'correct-horse-battery-staple',
+			}),
+		})
+		assert.equal(nativeSignup.status, 200)
+		const nativeSignin = await fetch(`${baseURL}/api/auth/sign-in/email`, {
+			method: 'POST',
+			headers: frontHeaders,
+			body: JSON.stringify({ email: nativeEmail, password: 'correct-horse-battery-staple' }),
+		})
+		assert.equal(nativeSignin.status, 200)
+		assert.equal(nativeSignin.headers.get('access-control-allow-origin'), 'http://localhost:5173')
+		const nativeCookie = nativeSignin.headers.get('set-cookie')!.split(';')[0]!
+		const nativeSession = await fetch(`${baseURL}/api/auth/get-session`, {
+			headers: { Cookie: nativeCookie, Origin: 'http://localhost:5173' },
+		})
+		assert.equal(nativeSession.status, 200)
+		assert.equal((await nativeSession.json()).user.email, nativeEmail)
+		assert.equal(
+			(
+				await fetch(`${baseURL}/api/auth/sign-out`, {
+					method: 'POST',
+					headers: { ...frontHeaders, Cookie: nativeCookie },
+					body: '{}',
+				})
+			).status,
+			200,
+		)
+		assert.equal(
+			(
+				await fetch(`${baseURL}/api/auth/callback/google?error=access_denied`, {
+					redirect: 'manual',
+				})
+			).status,
+			302,
+		)
 
 		const signout = await fetch(`${baseURL}/auth/logout`, {
 			method: 'POST',
@@ -96,6 +145,21 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async () 
 			headers: { Cookie: cookie },
 		})
 		assert.equal(expired.status, 401)
+		assertOperationsCovered([
+			'GET /',
+			'GET /health/live',
+			'GET /health/ready',
+			'POST /auth/register',
+			'POST /auth/login',
+			'POST /auth/logout',
+			'GET /users/me',
+			'GET /auth/google',
+			'GET /api/auth/callback/google',
+			'POST /api/auth/sign-up/email',
+			'POST /api/auth/sign-in/email',
+			'POST /api/auth/sign-out',
+			'GET /api/auth/get-session',
+		])
 	} finally {
 		server.kill('SIGTERM')
 		if (server.exitCode === null) await once(server, 'exit')

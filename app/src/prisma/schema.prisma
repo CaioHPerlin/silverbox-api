@@ -27,6 +27,7 @@ model User {
   files       File[]
   sharedLinks SharedLink[]
   auditLogs   AuditLog[]
+  uploadReservations UploadReservation[]
 
   @@map("users")
   @@schema("silverbox_api")
@@ -91,9 +92,11 @@ model Folder {
   updatedAt      DateTime @updatedAt @map("updatedat") @db.Timestamp
 
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "userid")
-  parent   Folder?  @relation("FolderHierarchy", fields: [parentFolderId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "fk_folders_folders")
+  parent   Folder?  @relation("FolderHierarchy", fields: [parentFolderId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_folders_folders")
   children Folder[] @relation("FolderHierarchy")
   files    File[]
+
+  @@index([userId, parentFolderId])
 
   @@map("folders")
   @@schema("silverbox_api")
@@ -102,7 +105,7 @@ model Folder {
 model File {
   id           Int       @id(map: "pk_files") @default(autoincrement())
   userId       Int       @map("userid")
-  folderId     Int       @map("folderid")
+  folderId     Int?      @map("folderid")
   originalName String    @map("originalname") @db.VarChar
   storageKey   String    @map("storagekey") @db.VarChar
   sizeBytes    BigInt    @map("sizebytes")
@@ -110,13 +113,18 @@ model File {
   checksum     String    @db.VarChar
   isDeleted    Boolean   @default(false) @map("isdeleted")
   deletedAt    DateTime? @map("deletedat") @db.Timestamp
+  status       String    @default("ready") @db.VarChar(16)
   createdAt    DateTime  @default(now()) @map("createdat") @db.Timestamp
   updatedAt    DateTime  @updatedAt @map("updatedat") @db.Timestamp
 
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "fk_files_users")
-  folder      Folder        @relation(fields: [folderId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "fk_files_folders")
+  folder      Folder?       @relation(fields: [folderId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "fk_files_folders")
   versions    FileVersion[]
   sharedLinks SharedLink[]
+
+  @@index([userId, folderId, isDeleted, createdAt])
+  @@index([userId, isDeleted, status])
+  @@unique([storageKey])
 
   @@map("files")
   @@schema("silverbox_api")
@@ -129,9 +137,14 @@ model FileVersion {
   versionNumber Int      @map("versionnumber")
   sizeBytes     BigInt   @map("sizebytes")
   checksum      String   @db.VarChar
+  mimeType      String   @default("application/octet-stream") @map("mimetype") @db.VarChar
   createdAt     DateTime @default(now()) @map("createdat") @db.Timestamp
 
   file File @relation(fields: [fileId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "fk_file_versions_files")
+
+  @@unique([fileId, versionNumber])
+  @@unique([storageKey])
+  @@index([fileId, createdAt])
 
   @@map("file_versions")
   @@schema("silverbox_api")
@@ -144,12 +157,28 @@ model SharedLink {
   token     String   @unique(map: "token_link_unq") @db.VarChar
   expiresAt DateTime @map("expiresat") @db.Timestamp
   createdAt DateTime @default(now()) @map("createdat") @db.Timestamp
+  revokedAt DateTime? @db.Timestamp
 
-  // No diagrama esta FK não tem ON DELETE/UPDATE definidos (padrão NO ACTION)
-  file File @relation(fields: [fileId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fileid")
+  file File @relation(fields: [fileId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fileid")
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "userid")
 
   @@map("shared_links")
+  @@schema("silverbox_api")
+}
+
+model UploadReservation {
+  id         String   @id @db.Uuid
+  userId     Int      @map("userid")
+  storageKey String   @unique @map("storagekey") @db.VarChar
+  sizeBytes  BigInt   @map("sizebytes")
+  createdAt  DateTime @default(now()) @map("createdat") @db.Timestamp
+  expiresAt  DateTime @map("expiresat") @db.Timestamp
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("upload_reservations")
   @@schema("silverbox_api")
 }
 

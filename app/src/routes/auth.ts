@@ -1,4 +1,4 @@
-import { APIError } from 'better-auth/api'
+import { isAPIError } from 'better-auth/api'
 import { fromNodeHeaders } from 'better-auth/node'
 import { Router, type NextFunction, type Request, type Response } from 'express'
 import { auth } from '../lib/auth.js'
@@ -9,12 +9,14 @@ export const usersRouter = Router()
 
 type AuthResult = { headers: Headers; response: unknown }
 
-function forwardHeaders(res: Response, headers: Headers): void {
-	headers.forEach((value, key) => {
+function forwardHeaders(res: Response, headers: ConstructorParameters<typeof Headers>[0]): void {
+	const source = new Headers(headers)
+
+	source.forEach((value, key) => {
 		if (key.toLowerCase() !== 'set-cookie') res.setHeader(key, value)
 	})
 
-	const cookies = headers.getSetCookie()
+	const cookies = source.getSetCookie()
 	if (cookies.length > 0) res.setHeader('set-cookie', cookies)
 }
 
@@ -29,7 +31,7 @@ async function sendAuthResult(
 		forwardHeaders(res, result.headers)
 		respond(result.response)
 	} catch (error) {
-		if (error instanceof APIError) {
+		if (isAPIError(error)) {
 			forwardHeaders(res, error.headers)
 			res.status(error.statusCode).json(error.body)
 			return

@@ -2,6 +2,9 @@ import { z } from 'zod'
 import { existsSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
 
+const emptyToUndefined = (value: unknown) =>
+	typeof value === 'string' && value.trim() === '' ? undefined : value
+
 if (existsSync('.env')) {
 	process.loadEnvFile()
 }
@@ -25,6 +28,15 @@ const envSchema = z
 		BETTER_AUTH_SECRET: z.string().min(32, 'BETTER_AUTH_SECRET must be at least 32 characters'),
 		GOOGLE_CLIENT_ID: z.string().optional(),
 		GOOGLE_CLIENT_SECRET: z.string().optional(),
+		SMTP_HOST: z.preprocess(emptyToUndefined, z.string().trim().min(1).optional()),
+		SMTP_PORT: z.preprocess(
+			emptyToUndefined,
+			z.coerce.number().int().min(1).max(65535).optional(),
+		),
+		SMTP_USER: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+		SMTP_PASSWORD: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+		SMTP_SECURE: z.preprocess(emptyToUndefined, z.enum(['true', 'false']).optional()),
+		MAIL_FROM: z.preprocess(emptyToUndefined, z.string().trim().min(1).optional()),
 
 		LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 		STORAGE_ROOT: z
@@ -61,6 +73,23 @@ const envSchema = z
 		path: ['GOOGLE_CLIENT_ID'],
 	})
 	.superRefine((value, context) => {
+		const smtpKeys = [
+			'SMTP_HOST',
+			'SMTP_PORT',
+			'SMTP_USER',
+			'SMTP_PASSWORD',
+			'SMTP_SECURE',
+			'MAIL_FROM',
+		] as const
+		const smtpIsPartiallyConfigured = smtpKeys.some((key) => value[key] !== undefined)
+		if (smtpIsPartiallyConfigured && smtpKeys.some((key) => value[key] === undefined))
+			context.addIssue({
+				code: 'custom',
+				path: ['SMTP_HOST'],
+				message:
+					'SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_SECURE and MAIL_FROM must be set together',
+			})
+
 		if (value.NODE_ENV === 'production') {
 			for (const key of ['STORAGE_ROOT', 'STORAGE_MAX_BYTES'] as const) {
 				if (value[key] === undefined)
@@ -80,6 +109,7 @@ const envSchema = z
 	})
 	.transform((value) => ({
 		...value,
+		SMTP_SECURE: value.SMTP_SECURE === undefined ? undefined : value.SMTP_SECURE === 'true',
 		STORAGE_ROOT: value.STORAGE_ROOT ?? resolve(process.cwd(), '.data'),
 		STORAGE_MAX_BYTES: value.STORAGE_MAX_BYTES ?? 10737418240n,
 	}))

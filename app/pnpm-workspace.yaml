@@ -3,3 +3,6 @@ allowBuilds:
   '@scarf/scarf': false
   esbuild: true
   prisma: true
+minimumReleaseAgeExclude:
+  - nodemailer@10.2.1
+  - smtp-server@3.21.1

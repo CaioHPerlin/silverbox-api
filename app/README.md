@@ -64,6 +64,7 @@ O processo local usa `.data/` dentro de `app/`; o Compose usa `/var/lib/silverbo
 | `STORAGE_MAX_USER_TRANSFERS` | `2` | Transferências simultâneas por usuário |
 | `MAX_UPLOAD_BYTES` | `1073741824` (1 GiB) | Máximo por arquivo, nunca acima de 1 GiB |
 | `FRONTEND_ORIGINS` | `http://localhost:5173,http://localhost:3000` | Origens de navegador confiáveis |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_SECURE`, `MAIL_FROM` | Ausentes | Conjunto SMTP completo para habilitar recuperação de senha; `SMTP_SECURE=true` usa TLS direto e `false` exige STARTTLS |
 
 O Compose permite sobrescrever limites por variáveis de ambiente ou `.env`, mas mantém seu caminho interno de volume. Para uma implantação com disco/montagem próprios, configure o caminho e o volume correspondentes na etapa de implantação.
 
@@ -87,6 +88,18 @@ curl -b cookies.txt -H 'Origin: http://localhost:8000' \
 Veja [`../dados/arquivos.md`](../dados/arquivos.md) para **endpoint → corpo → resposta**. Para testar operações privadas no Swagger, execute primeiro `/auth/register` ou `/auth/login`; o navegador envia o cookie automaticamente.
 
 Google é opcional. Preencha as duas credenciais e configure o redirect URI `http://localhost:8000/api/auth/callback/google` no Google Cloud. Comece pelo navegador em `/auth/google`, mantendo o cookie de estado. Em produção use `${BETTER_AUTH_URL}/api/auth/callback/google`, com a origem HTTPS correta. Sem credenciais, `/auth/google` retorna `400` legível e o login por senha continua funcionando.
+
+### Recuperação de senha
+
+A solicitação usa `POST /api/auth/request-password-reset`, exposto pelo Better Auth. Envie `email` e, opcionalmente, `redirectTo` com uma URL em uma origem confiável de `FRONTEND_ORIGINS`. O corpo de sucesso é igual para e-mails cadastrados e desconhecidos. Sem SMTP, o endpoint retorna `400` com `RESET_PASSWORD_DISABLED`.
+
+Configure juntas `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_SECURE` e `MAIL_FROM` no `.env`. Todas vazias deixam o envio desabilitado; configuração parcial impede a API de iniciar. `SMTP_SECURE=true` usa TLS direto. `SMTP_SECURE=false` exige STARTTLS. Em ambos os casos os certificados são verificados. As variáveis são genéricas: qualquer serviço que ofereça SMTP autenticado pode ser usado atualizando esses valores e o remetente permitido no serviço. A API aceita a solicitação sem aguardar a entrega; falhas são registradas sem dados do destinatário ou do link. Não há fila persistente nem repetição automática, então uma interrupção do processo pode perder envios pendentes. O token Better Auth expira em uma hora. O limite nativo é de três solicitações por minuto por IP; em produção, a API deve receber tráfego pelo proxy reverso (Traefik no deploy ou Caddy no Compose local), que define `X-Real-IP`. O acesso direto à API deve ficar restrito à rede interna.
+
+```sh
+curl -X POST http://localhost:8000/api/auth/request-password-reset \
+  -H 'Origin: http://localhost:5173' -H 'Content-Type: application/json' \
+  -d '{"email":"user@example.com","redirectTo":"http://localhost:5173/reset-password"}'
+```
 
 ## Verificação
 

@@ -32,7 +32,7 @@ test(
 	{ timeout: 300000 },
 	async () => {
 		try {
-			await compose('up', '--build', '-d', '--wait')
+			await compose('up', process.env.TEST_IMAGE ? '--no-build' : '--build', '-d', '--wait')
 			assert.equal((await fetch(`${baseURL}/health/ready`)).status, 200)
 			await validateHttpContracts(baseURL)
 			assert.equal((await fetch(`${baseURL}/docs`)).status, 200)

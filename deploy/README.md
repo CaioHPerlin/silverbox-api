@@ -6,13 +6,17 @@ O ambiente local independe da Oracle. Consulte o README do projeto. Não copie o
 
 ## Fluxo
 
-Push em `feature/ci-cd` ou `main` executa os gates e publica imagem Linux ARM64 no GHCR com tag igual ao SHA completo do commit. Pull requests só validam. A arquitetura foi escolhida após inspeção do `dock` (Ubuntu 24.04, aarch64, Docker, rede externa `traefik`). Runners: [referência oficial GitHub](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+Pull requests e pushes em `main` executam CI com pnpm, build, testes HTTP e Docker. Validações anteriores da mesma branch são canceladas. A compatibilidade npm executa quando mudam manifests, lockfiles, configuração Node ou arquivos de `.github/`; disparos manuais e comparações indisponíveis sempre executam npm. Os dois gerenciadores continuam suportados.
+
+Após CI aprovado de um push em `main`, o workflow independente **Publish and deploy** publica imagem Linux ARM64 no GHCR com tag igual ao SHA validado. PRs não publicam. O fluxo confere se o SHA ainda é o atual de `main` antes da publicação e antes da aplicação. Deploys são serializados, sem cancelamento de execução em andamento. A imagem de teste AMD64 e a imagem de release ARM64 têm caches GHA separados.
 
 O ambiente GitHub `oracle` guarda `ORACLE_HOST`, `ORACLE_USER`, `ORACLE_SSH_KEY` e `ORACLE_KNOWN_HOSTS`. Foram cadastradas chaves exclusivas por repositório; a chave pessoal não foi copiada. A identidade SSH é fixada pelo known_hosts, sem `StrictHostKeyChecking=no`. As chaves públicas têm `restrict` (sem encaminhamento ou PTY); o usuário ainda tem os privilégios de Docker da conta `perlin`.
 
-Após publicar, o pipeline executa inicialização e rollback em ARM64 no runner e repete o mesmo teste privado na Oracle: projeto Compose temporário, sem portas publicadas, sem router Traefik e com dados descartáveis. O teste extrai temporariamente o binário Node24 da imagem oficial, sem instalação no sistema, e limpa contêineres, volumes e arquivos próprios ao terminar. Isso não substitui validar DNS, HTTPS e OAuth no domínio final.
+Toda publicação executa startup, persistência e rollback em ARM64 no runner. A repetição completa na Oracle ocorre **somente manualmente**, em projeto Compose isolado, sem portas públicas ou router Traefik, com dados descartáveis. O teste extrai temporariamente Node24 da imagem oficial e limpa seus próprios recursos.
 
-**O deploy só é habilitado com a variável `ORACLE_READY=true` no ambiente `oracle`.** Enquanto faltarem os domínios e o `.env`, a imagem é publicada e o passo SSH é pulado. Não habilitar antes da configuração abaixo. Após habilitar, pushes nessas duas branches fazem deploy; remover `feature/ci-cd` da lista de push ao encerrar a homologação. O workflow também aceita disparo manual com `deploy=true` após existir na branch padrão.
+**Aplicação da release exige `ORACLE_READY=true` no ambiente `oracle`.** O fluxo automático aplica após os gates, verifica saúde e depois DNS/HTTPS. Se a variável estiver desabilitada, publica e valida ARM64 sem aplicar a release. Não alterar essa variável antes de preparar domínios e `.env`.
+
+Para ensaio manual, selecionar **Publish and deploy → Run workflow → main**: `oracle_check=true` e `deploy=false` são os padrões. Exige CI aprovado para o SHA exato selecionado; sem aprovação, executar CI manual na `main` primeiro. O ensaio não troca a release pública. Para aplicar manualmente, marcar `deploy=true`; a proteção `ORACLE_READY` continua obrigatória. O input antigo `deploy` do workflow CI foi substituído pelos controles deste workflow independente.
 
 ## Preparação
 

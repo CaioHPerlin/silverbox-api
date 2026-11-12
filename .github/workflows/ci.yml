@@ -153,4 +153,3 @@ jobs:
         working-directory: app
         env:
           TEST_IMAGE: silverbox-api-test:${{ github.sha }}
-

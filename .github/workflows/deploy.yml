@@ -6,6 +6,10 @@ on:
     types: [completed]
   workflow_dispatch:
     inputs:
+      oracle_check:
+        description: Run isolated startup and rollback rehearsal on Oracle
+        type: boolean
+        default: true
       deploy:
         description: Apply the validated main revision to Oracle
         type: boolean
@@ -83,7 +87,7 @@ jobs:
           DEPLOY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node --test deploy/test/*.test.ts
       - name: Test private production release on Oracle
-        if: steps.publish-check.outputs.current == 'true'
+        if: github.event_name == 'workflow_dispatch' && inputs.oracle_check && steps.publish-check.outputs.current == 'true'
         shell: bash
         env:
           SSH_HOST: ${{ secrets.ORACLE_HOST }}

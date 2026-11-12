@@ -2,22 +2,17 @@ name: CI
 
 on:
   push:
-    branches: [main, feature/ci-cd]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      deploy:
-        description: Deploy this revision to Oracle after validation
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   changes:
@@ -159,15 +154,3 @@ jobs:
         env:
           TEST_IMAGE: silverbox-api-test:${{ github.sha }}
 
-  deploy:
-    needs: [build-and-test, npm-compat, docker]
-    if: >-
-      always() && !cancelled() &&
-      needs.build-and-test.result == 'success' && needs.docker.result == 'success' &&
-      (needs.npm-compat.result == 'success' || needs.npm-compat.result == 'skipped') &&
-      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy))
-    permissions:
-      contents: read
-      packages: write
-    uses: ./.github/workflows/deploy.yml
-    secrets: inherit

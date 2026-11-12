@@ -20,6 +20,22 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      npm: ${{ steps.detect.outputs.npm }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: node --test .github/scripts/*.test.cjs
+      - uses: actions/github-script@v7
+        id: detect
+        with:
+          script: |
+            const { detect } = require('./.github/scripts/npm-changes.cjs');
+            core.setOutput('npm', String(detect(context)));
+
   build-and-test:
     name: Build & Test
     runs-on: ubuntu-latest
@@ -83,6 +99,8 @@ jobs:
         run: pnpm test
 
   npm-compat:
+    needs: changes
+    if: needs.changes.outputs.npm == 'true'
     name: npm compatibility
     runs-on: ubuntu-latest
 
@@ -143,7 +161,11 @@ jobs:
 
   deploy:
     needs: [build-and-test, npm-compat, docker]
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy)
+    if: >-
+      always() && !cancelled() &&
+      needs.build-and-test.result == 'success' && needs.docker.result == 'success' &&
+      (needs.npm-compat.result == 'success' || needs.npm-compat.result == 'skipped') &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy))
     permissions:
       contents: read
       packages: write

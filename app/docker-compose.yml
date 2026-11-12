@@ -3,6 +3,7 @@ name: silverbox-api-dev
 services:
   api:
     build: .
+    image: ${TEST_IMAGE:-silverbox-api-local}
     init: true
     depends_on:
       db:

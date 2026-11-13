@@ -556,7 +556,7 @@ export const swaggerSpec = swaggerJsdoc({
 			title: 'Silverbox API',
 			version: '1.0.0',
 			description:
-				'Entre por /auth/register ou /auth/login no Try it out para usar a sessão HttpOnly. Use o mesmo hostname em todas as chamadas. Uploads recebem bytes brutos, não multipart. Em HTTPS o cookie usa o prefixo __Secure-.',
+				'Entre por /auth/register ou /auth/login no Try it out para usar a sessão HttpOnly. Use o mesmo hostname em todas as chamadas. Uploads recebem bytes brutos, não multipart. Em HTTPS o cookie usa o prefixo __Secure-. O deploy permite CORS de origens HTTP(S), refletindo Origin com credenciais; isso não dispensa sessão nem autoriza acesso a arquivos de terceiros. Para desenvolver o front no localhost contra esta API, use o proxy /__api do Vite em silverbox-web; cookies SameSite=Lax não são enviados diretamente entre sites distintos. Origens de autenticação direta continuam configuradas em FRONTEND_ORIGINS.',
 		},
 		servers: [{ url: env.BETTER_AUTH_URL, description: 'Origem pública configurada' }],
 		tags: ['Auth', 'Folders', 'Files', 'Shares', 'Storage', 'Health'].map((name) => ({ name })),

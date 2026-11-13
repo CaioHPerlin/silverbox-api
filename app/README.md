@@ -1,6 +1,14 @@
 # Silverbox API
 
-## Para desenvolver apenas o front
+## Para desenvolver apenas o front contra a API publicada
+
+No repositório `silverbox-web`, com Node 24 e pnpm 11, execute `pnpm install --frozen-lockfile` e `pnpm dev`. Abra http://localhost:5173. Não é necessário rodar esta API, banco ou storage localmente; o Vite usa https://api.silverbox.perlin.com.br por padrão.
+
+O proxy `/__api` do front mantém autenticação, upload e download na mesma origem do navegador. Ele traduz os cookies somente no transporte local; a API HTTPS mantém Secure, HttpOnly e SameSite=Lax. Cadastro, login e logout usam e-mail/senha; Google é opcional. Contas e arquivos criados pertencem à instância compartilhada. Veja o [guia do front](https://github.com/CaioHPerlin/silverbox-web#desenvolver-o-front-usando-a-api-publicada).
+
+O deploy permite CORS de qualquer origem HTTP(S) com `CORS_ALLOW_ALL_ORIGINS=true`, refletindo Origin com `Vary: Origin` e credenciais. `null`, esquemas não HTTP(S) e valores inválidos são rejeitados. Login, autorização e isolamento de arquivos continuam obrigatórios. As origens de autenticação direta do Better Auth permanecem em `FRONTEND_ORIGINS`; o proxy usa a origem da própria API. CORS não resolve cookies entre localhost e outro site sem o proxy.
+
+## Alternativa: API e banco locais com Docker
 
 Instale Docker com Compose e, dentro de `app/`, execute:
 
@@ -21,7 +29,7 @@ Cadastre uma conta por e-mail e senha pelo front ou pelo Swagger. O navegador gu
 await fetch('http://localhost:8000/users/me', { credentials: 'include' })
 ```
 
-As origens locais permitidas são `http://localhost:5173` e `http://localhost:3000`. Para outra porta, configure `FRONTEND_ORIGINS` com origens separadas por vírgula e recrie a API. CORS rejeita origens desconhecidas; não usa `*` com cookies.
+As origens locais permitidas são `http://localhost:5173` e `http://localhost:3000`. Para outra porta, configure `FRONTEND_ORIGINS` com origens separadas por vírgula e recrie a API. Por padrão local, CORS rejeita origens desconhecidas; `CORS_ALLOW_ALL_ORIGINS=true` permite origens HTTP(S) mantendo credenciais sem `*`.
 
 ```sh
 docker compose logs -f api
@@ -31,7 +39,7 @@ docker compose down
 docker compose down --volumes
 ```
 
-Banco e arquivos usam volumes separados e persistem ao recriar os contêineres. O Compose é uma configuração local de desenvolvimento, com senha/segredo locais. A implantação Oracle será tratada na branch `feature/ci-cd`.
+Banco e arquivos usam volumes separados e persistem ao recriar os contêineres. O Compose é uma configuração local de desenvolvimento, com senha/segredo locais. A implantação Oracle é documentada em `deploy/README.md`.
 
 ## Para desenvolver a API sem contêiner
 
@@ -63,6 +71,7 @@ O processo local usa `.data/` dentro de `app/`; o Compose usa `/var/lib/silverbo
 | `STORAGE_MAX_TRANSFERS` | `4` | Transferências simultâneas globais |
 | `STORAGE_MAX_USER_TRANSFERS` | `2` | Transferências simultâneas por usuário |
 | `MAX_UPLOAD_BYTES` | `1073741824` (1 GiB) | Máximo por arquivo, nunca acima de 1 GiB |
+| `CORS_ALLOW_ALL_ORIGINS` | `false` local, `true` no deploy | Permite CORS HTTP(S); não dispensa sessão nem muda origens de autenticação |
 | `FRONTEND_ORIGINS` | `http://localhost:5173,http://localhost:3000` | Origens de navegador confiáveis |
 
 O Compose permite sobrescrever limites por variáveis de ambiente ou `.env`, mas mantém seu caminho interno de volume. Para uma implantação com disco/montagem próprios, configure o caminho e o volume correspondentes na etapa de implantação.

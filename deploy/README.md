@@ -53,3 +53,9 @@ Deploy não integra automaticamente as telas de arquivos do web: várias ainda u
 - Callback Google: `https://api.silverbox.perlin.com.br/api/auth/callback/google`
 
 Os registros A devem apontar para `152.67.57.175`. O deploy público exige DNS confirmado para cada serviço; os segredos ficam somente no `.env` privado da Oracle.
+
+## Front local contra a API publicada
+
+O Compose de produção ativa `CORS_ALLOW_ALL_ORIGINS=true` por padrão. É possível sobrescrever para `false` no `.env` e restringir novamente à API e `FRONTEND_ORIGINS`. `FRONTEND_ORIGINS` agora respeita o `.env`; sem valor, continua sendo `https://${WEB_HOST}`. Nenhum segredo precisa ir para o front.
+
+O time pode executar apenas `pnpm dev` em `silverbox-web`: o proxy Vite `/__api` aponta à API pública e traduz cookies de sessão exclusivamente no loopback. O deploy mantém cookies Secure/HttpOnly/SameSite=Lax, login e isolamento por proprietário. Liberação CORS não libera arquivos anônimos nem remove a validação de origem do Better Auth. Para um web separado em HTTPS, configurar também as origens de autenticação e respeitar as regras SameSite; usar o proxy é o caminho suportado no desenvolvimento local.

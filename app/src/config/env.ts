@@ -37,6 +37,10 @@ const envSchema = z
 		STORAGE_MIN_FREE_INODES: z.coerce.bigint().nonnegative().default(1024n),
 		STORAGE_MAX_TRANSFERS: z.coerce.number().int().positive().default(4),
 		STORAGE_MAX_USER_TRANSFERS: z.coerce.number().int().positive().default(2),
+		CORS_ALLOW_ALL_ORIGINS: z
+			.enum(['true', 'false'])
+			.default('false')
+			.transform((v) => v === 'true'),
 		FRONTEND_ORIGINS: z
 			.string()
 			.default('http://localhost:5173,http://localhost:3000')

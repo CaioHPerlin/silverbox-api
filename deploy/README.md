@@ -38,7 +38,7 @@ Rollback manual: escolher um diretório de release anterior, usar `IMAGE=$(cat i
 
 O projeto Compose `silverbox-api` cria volumes separados `silverbox-api_database` e `silverbox-api_files`. O volume de arquivos nasce do diretório da imagem, UID/GID 1000, modo 0700; arquivos 0600. A aplicação valida ownership, permissões, symlinks e lock PostgreSQL. Não há chown automático em dados existentes. Se optar por bind mount, preparar somente o diretório novo explicitamente para UID1000 e modo700; não alterar recursivamente dados sem inspeção.
 
-Padrões: teto 10GiB, margem física maior entre 5GiB e 10%, reserva de 1024 inodes, quatro transferências globais e duas por usuário. O host foi inspecionado com ~35GiB livres em filesystem de 45GiB. Ajustar o orçamento conforme o crescimento do banco e demais serviços.
+Padrões: teto 10GiB, margem física de 100MiB e reserva percentual desabilitada, reserva de 1024 inodes, quatro transferências globais e duas por usuário. O host foi inspecionado com ~35GiB livres em filesystem de 45GiB. Ajustar o orçamento conforme o crescimento do banco e demais serviços.
 
 Backup consistente: bloquear novas gravações/parar a API, gerar dump PostgreSQL e copiar todo o volume de arquivos antes de retomar. Guardar também o `.env` cifrado em local privado. Na restauração, recuperar banco e arquivos do mesmo ponto, conferir UID1000/modos e iniciar uma única API. Não restaurar somente os metadados nem somente os objetos. Validar download/SHA-256 após restauração.
 

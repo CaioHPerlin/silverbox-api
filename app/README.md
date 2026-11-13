@@ -65,8 +65,8 @@ O processo local usa `.data/` dentro de `app/`; o Compose usa `/var/lib/silverbo
 | --- | --- | --- |
 | `STORAGE_ROOT` | Caminho absoluto de `app/.data` | Diretório privado; obrigatório em produção |
 | `STORAGE_MAX_BYTES` | `10737418240` (10 GiB) | Teto global, incluindo versões, lixeira e reservas; obrigatório em produção |
-| `STORAGE_MIN_FREE_BYTES` | `5368709120` (5 GiB) | Margem mínima física |
-| `STORAGE_MIN_FREE_PERCENT` | `10` | Percentual de capacidade a preservar; prevalece a maior margem |
+| `STORAGE_MIN_FREE_BYTES` | `104857600` (100 MiB) | Margem mínima física |
+| `STORAGE_MIN_FREE_PERCENT` | `0` | Percentual de capacidade a preservar; prevalece a maior margem |
 | `STORAGE_MIN_FREE_INODES` | `1024` | Inodes livres a preservar |
 | `STORAGE_MAX_TRANSFERS` | `4` | Transferências simultâneas globais |
 | `STORAGE_MAX_USER_TRANSFERS` | `2` | Transferências simultâneas por usuário |

@@ -20,13 +20,17 @@ test('public domain resolves normally and HTTPS routes are ready', { timeout: 15
         const spec = await docs.json()
         assert.ok(spec.paths['/users/me'])
         assert.ok(spec.paths['/files'])
+        for (const origin of [web, 'http://localhost:5173', 'https://preview.example']) {
         const preflight = await fetch(api + '/files', {
           method: 'OPTIONS', signal: AbortSignal.timeout(5000),
-          headers: { Origin: web, 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type,x-file-name,x-file-size' },
+          headers: { Origin: origin, 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type,x-file-name,x-file-size,x-file-mime,x-folder-id' },
         })
         assert.equal(preflight.status, 204)
-        assert.equal(preflight.headers.get('access-control-allow-origin'), web)
+        assert.equal(preflight.headers.get('access-control-allow-origin'), origin)
         assert.equal(preflight.headers.get('access-control-allow-credentials'), 'true')
+        assert.match(preflight.headers.get('vary') ?? '', /Origin/)
+        assert.equal((await fetch(api + '/users/me', { headers: { Origin: origin } })).status, 401)
+        }
       } else {
         const page = await fetch(web + '/login', { signal: AbortSignal.timeout(5000) })
         assert.equal(page.status, 200)

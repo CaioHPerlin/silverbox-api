@@ -104,7 +104,7 @@ test(
 						Origin: 'https://untrusted.example',
 					})
 				).status,
-				403,
+				401,
 			)
 			const preflight = await request('/files', 'OPTIONS', undefined, undefined, {
 				'Access-Control-Request-Method': 'POST',

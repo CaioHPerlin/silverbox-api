@@ -13,7 +13,8 @@ services:
       PORT: 8000
       DATABASE_URL: postgresql://silverbox:${POSTGRES_PASSWORD:?Required}@db:5432/silverbox
       BETTER_AUTH_URL: https://${API_HOST:?Required}
-      FRONTEND_ORIGINS: https://${WEB_HOST:?Required}
+      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-https://${WEB_HOST:?Required}}
+      CORS_ALLOW_ALL_ORIGINS: ${CORS_ALLOW_ALL_ORIGINS:-true}
       STORAGE_ROOT: /var/lib/silverbox/files
       STORAGE_MAX_BYTES: ${STORAGE_MAX_BYTES:-10737418240}
     volumes:

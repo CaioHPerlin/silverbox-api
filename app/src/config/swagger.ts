@@ -175,6 +175,24 @@ const schemas: Record<string, Schema> = {
 		minProperties: 1,
 		additionalProperties: false,
 	},
+	SearchItem: object({
+		kind: str({ enum: ['file', 'folder'] }),
+		id: integer(),
+		name,
+		folderId: {
+			...folderId,
+			description: 'Pasta onde o item está (para pastas, a pasta-mãe); null na raiz',
+		},
+		path: {
+			...array(object({ id: integer(), name })),
+			description: 'Pastas da raiz até o local do item, sem incluir o próprio item',
+		},
+		sizeBytes: integer({ minimum: 0, nullable: true, description: 'null para pastas' }),
+		mimeType: str({ nullable: true, description: 'null para pastas' }),
+		isDeleted: { type: 'boolean', description: 'true apenas com includeTrash=true' },
+		createdAt: date,
+		updatedAt: date,
+	}),
 	Version: object({
 		id: integer(),
 		versionNumber: integer(),
@@ -402,6 +420,60 @@ const paths: Record<string, unknown> = {
 			},
 		),
 	},
+	'/search': {
+		get: op(
+			'Search',
+			'Buscar arquivos e pastas pelo nome',
+			{
+				200: response(
+					'Página de resultados',
+					object({
+						items: array(ref('SearchItem')),
+						page: integer(),
+						limit: integer(),
+						total: integer({ minimum: 0 }),
+					}),
+				),
+			},
+			{
+				description: [
+					'Busca por trecho do nome, sem diferenciar maiúsculas/minúsculas nem acentos',
+					'("relatorio" encontra "Relatório.pdf"). `%`, `_` e `\\` são tratados literalmente.',
+					'Retorna somente itens do usuário da sessão. Arquivos na lixeira ficam de fora,',
+					'salvo includeTrash=true; pastas não têm lixeira.',
+					'Ordem estável: pastas antes de arquivos, depois nome e id.',
+					'O filtro, a contagem e a paginação são feitos no banco.',
+				].join(' '),
+				parameters: [
+					param(
+						'q',
+						'query',
+						str({ minLength: 1, maxLength: 100 }),
+						true,
+						'Trecho do nome; espaços nas pontas são ignorados',
+					),
+					param(
+						'scope',
+						'query',
+						str({ enum: ['all', 'folder'], default: 'all' }),
+						false,
+						'all: todas as pastas do usuário. folder: a pasta folderId (ou a raiz, se omitida) e todas as subpastas; a própria pasta não aparece no resultado.',
+					),
+					param(
+						'folderId',
+						'query',
+						integer({ minimum: 1 }),
+						false,
+						'Somente com scope=folder',
+					),
+					param('type', 'query', str({ enum: ['all', 'file', 'folder'], default: 'all' })),
+					param('includeTrash', 'query', str({ enum: ['true', 'false'], default: 'false' })),
+					param('page', 'query', integer({ minimum: 1, maximum: 10000, default: 1 })),
+					param('limit', 'query', integer({ minimum: 1, maximum: 100, default: 50 })),
+				],
+			},
+		),
+	},
 	'/files/trash': {
 		get: op('Files', 'Listar lixeira', {
 			200: response('Arquivos retidos na cota', object({ files: array(ref('File')) })),
@@ -559,7 +631,9 @@ export const swaggerSpec = swaggerJsdoc({
 				'Entre por /auth/register ou /auth/login no Try it out para usar a sessão HttpOnly. Use o mesmo hostname em todas as chamadas. Uploads recebem bytes brutos, não multipart. Em HTTPS o cookie usa o prefixo __Secure-. O deploy permite CORS de origens HTTP(S), refletindo Origin com credenciais; isso não dispensa sessão nem autoriza acesso a arquivos de terceiros. Para desenvolver o front no localhost contra esta API, use o proxy /__api do Vite em silverbox-web; cookies SameSite=Lax não são enviados diretamente entre sites distintos. Origens de autenticação direta continuam configuradas em FRONTEND_ORIGINS.',
 		},
 		servers: [{ url: env.BETTER_AUTH_URL, description: 'Origem pública configurada' }],
-		tags: ['Auth', 'Folders', 'Files', 'Shares', 'Storage', 'Health'].map((name) => ({ name })),
+		tags: ['Auth', 'Folders', 'Files', 'Search', 'Shares', 'Storage', 'Health'].map((name) => ({
+			name,
+		})),
 		components: {
 			securitySchemes: {
 				sessionCookie: {

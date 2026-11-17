@@ -23,6 +23,7 @@ import { authRouter, usersRouter } from './routes/auth.js'
 import {
   filesRouter,
   foldersRouter,
+  searchRouter,
   sharesRouter,
   storageRouter,
 } from './routes/files.js'
@@ -56,6 +57,7 @@ export function createApp(): Application {
   app.use('/users', usersRouter)
   app.use('/folders', foldersRouter)
   app.use('/files', filesRouter)
+  app.use('/search', searchRouter)
   app.use('/shares', sharesRouter)
   app.use('/storage', storageRouter)
 

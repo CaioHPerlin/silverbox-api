@@ -109,6 +109,10 @@ pnpm test:docker
 
 Os testes são `.ts`. A suíte HTTP usa PostgreSQL e diretórios temporários, confere o OpenAPI e os contratos de resposta, testa cotas/concorrência/cancelamento e usa bancos separados para as proteções globais. O teste Docker cria e remove somente seus próprios volumes. Consulte [`../dados/validacao-2026-10-22.md`](../dados/validacao-2026-10-22.md) para as evidências desta entrega.
 
+## Busca de arquivos e pastas
+
+`GET /search?q=termo` busca por trecho do nome em todas as pastas do usuário, sem diferenciar maiúsculas nem acentos, com paginação e total calculados no banco. `scope=folder&folderId=<id>` restringe à pasta e às subpastas; a lixeira fica de fora salvo `includeTrash=true`. Cada resultado traz `path` com as pastas até o local do item. Contrato, índices (`unaccent`, `pg_trgm`, `btree_gin`) e medições: [`../dados/busca-por-nome.md`](../dados/busca-por-nome.md).
+
 ## Backup e restauração
 
 Pare a API para obter um conjunto consistente de banco e arquivos. Preserve as permissões e guarde os backups privadamente. No Compose:

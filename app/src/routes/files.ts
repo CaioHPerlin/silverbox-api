@@ -18,12 +18,14 @@ import {
 	versionJson,
 	withStoredBytes,
 } from '../lib/file-service.js'
+import { searchItems, searchQuerySchema } from '../lib/search.js'
 import { env } from '../config/env.js'
 
 export const foldersRouter = Router()
 export const filesRouter = Router()
 export const sharesRouter = Router()
 export const storageRouter = Router()
+export const searchRouter = Router()
 
 type Handler = (req: Request, res: Response) => Promise<void>
 const route = (handler: Handler) => (req: Request, res: Response, next: NextFunction) => {
@@ -184,6 +186,17 @@ foldersRouter.delete(
 		if (children || files) throw new HttpError(409, 'Folder is not empty')
 		await prisma.folder.delete({ where: { id: folderId } })
 		res.status(204).end()
+	}),
+)
+
+searchRouter.get(
+	'/',
+	route(async (req, res) => {
+		const owner = await userId(req)
+		const query = searchQuerySchema.parse(req.query)
+		if (query.scope === 'folder') await checkFolder(owner, query.folderId ?? null)
+		const { items, total } = await searchItems(owner, query)
+		res.json({ items, page: query.page, limit: query.limit, total })
 	}),
 )
 

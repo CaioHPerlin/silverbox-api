@@ -191,6 +191,12 @@ export async function reconcileStorage(clearAllReservations = false): Promise<vo
 	})
 	for (const reservation of expired) {
 		try {
+			if (
+				clearAllReservations &&
+				!(await storage.exists(`staging/${reservation.id}`)) &&
+				!(await storage.exists(reservation.storageKey))
+			)
+				continue
 			await storage.delete(`staging/${reservation.id}`)
 			await storage.delete(reservation.storageKey)
 			await prisma.uploadReservation.deleteMany({ where: { id: reservation.id } })

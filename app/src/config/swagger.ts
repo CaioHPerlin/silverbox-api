@@ -35,7 +35,7 @@ const binaryResponse = {
 	headers: {
 		'Content-Length': { schema: str() },
 		'Content-Disposition': {
-			schema: str(),
+			schema: str({ pattern: '^attachment;' }),
 			description: "attachment; filename*=UTF-8''<nome codificado>",
 		},
 		'X-Content-Type-Options': { schema: str({ enum: ['nosniff'] }) },
@@ -95,6 +95,8 @@ const op = (
 	},
 })
 const name = str({ minLength: 1, maxLength: 255, example: 'documento.pdf' })
+const sharePermission = str({ enum: ['view', 'download'] })
+const shareExpiry = { ...date, nullable: true }
 const folderId = integer({ minimum: 1, nullable: true, example: null })
 const uploadHeaders = [
 	param(
@@ -203,18 +205,48 @@ const schemas: Record<string, Schema> = {
 	}),
 	Share: object({
 		id: integer(),
-		expiresAt: date,
+		permission: sharePermission,
+		expiresAt: shareExpiry,
 		revokedAt: { ...date, nullable: true },
 		createdAt: date,
 	}),
+	UserShare: object({
+		id: integer(),
+		permission: sharePermission,
+		expiresAt: shareExpiry,
+		revokedAt: { ...date, nullable: true },
+		createdAt: date,
+		file: object({
+			id: integer(),
+			originalName: name,
+			mimeType: str(),
+			sizeBytes: integer({ minimum: 0 }),
+		}),
+		sharedBy: object({ id: integer(), name: str() }),
+		status: str({ enum: ['active', 'expired', 'revoked'] }),
+	}),
 	ShareCreate: {
 		...object(
-			{ expiresInSeconds: integer({ minimum: 60, maximum: 604800, default: 86400 }) },
+			{
+				expiresInSeconds: integer({
+					minimum: 60,
+					maximum: 604800,
+					default: 86400,
+					nullable: true,
+					description: 'Use null para criar um link sem expiração.',
+				}),
+				permission: { ...sharePermission, default: 'download' },
+			},
 			[],
 		),
 		additionalProperties: false,
 	},
-	ShareCreated: object({ id: integer(), url: str({ format: 'uri' }), expiresAt: date }),
+	ShareCreated: object({
+		id: integer(),
+		url: str({ format: 'uri' }),
+		expiresAt: shareExpiry,
+		permission: sharePermission,
+	}),
 	Usage: object(
 		Object.fromEntries(
 			['usedBytes', 'reservedBytes', 'limitBytes', 'availableBytes'].map((key) => [
@@ -567,9 +599,12 @@ const paths: Record<string, unknown> = {
 	'/files/{id}/shares': {
 		post: op(
 			'Shares',
-			'Criar link temporário',
-			{ 201: response('URL revelada uma única vez', ref('ShareCreated')) },
-			{ parameters: ids, requestBody: body(ref('ShareCreate')) },
+			'Criar link de compartilhamento',
+			{
+				201: response('URL revelada uma única vez', ref('ShareCreated')),
+				415: response('Tipo de arquivo incompatível com visualização', ref('Error')),
+			},
+			{ parameters: ids, requestBody: { ...body(ref('ShareCreate')), required: false } },
 		),
 		get: op(
 			'Shares',
@@ -586,11 +621,69 @@ const paths: Record<string, unknown> = {
 			{ parameters: [...ids, param('shareId')] },
 		),
 	},
+	'/shares': {
+		get: op(
+			'Shares',
+			'Listar compartilhamentos criados pelo usuário autenticado',
+			{
+				200: response(
+					'Links de todos os arquivos',
+					object({ shares: array(ref('UserShare')) }),
+				),
+			},
+			{
+				description:
+					'Ordena do mais recente ao mais antigo, com desempate por ID decrescente. Inclui links expirados e revogados. A revogação tem prioridade sobre a expiração. Tokens e URLs públicas são omitidos.',
+			},
+		),
+	},
+	'/shares/{shareId}/download': {
+		get: op(
+			'Shares',
+			'Baixar arquivo pelo ID de um compartilhamento criado pelo usuário autenticado',
+			{
+				200: binaryResponse,
+				403: response('Origem não permitida ou link sem permissão de download', ref('Error')),
+			},
+			{ parameters: [param('shareId')], errors: [410, 503] },
+		),
+	},
 	'/shares/{token}': {
 		get: op(
 			'Shares',
-			'Baixar arquivo por link temporário público',
-			{ 200: binaryResponse },
+			'Baixar arquivo por link público',
+			{
+				200: binaryResponse,
+				403: response('Origem não permitida ou link sem permissão de download', ref('Error')),
+			},
+			{
+				public: true,
+				parameters: [param('token', 'path', str({ minLength: 43, maxLength: 43 }))],
+				errors: [404, 410, 503],
+			},
+		),
+	},
+	'/shares/{token}/preview': {
+		get: op(
+			'Shares',
+			'Visualizar arquivo por link público',
+			{
+				200: {
+					...binaryResponse,
+					description:
+						'Conteúdo inline em sandbox. Suporta AVIF, GIF, JPEG, PNG, WebP e texto puro.',
+					headers: {
+						...binaryResponse.headers,
+						'Content-Disposition': {
+							schema: str({ pattern: '^inline;' }),
+							description: "inline; filename*=UTF-8''<nome codificado>",
+						},
+						'Content-Security-Policy': { schema: str() },
+						'Referrer-Policy': { schema: str({ enum: ['no-referrer'] }) },
+					},
+				},
+				415: response('Tipo de arquivo incompatível com visualização', ref('Error')),
+			},
 			{
 				public: true,
 				parameters: [param('token', 'path', str({ minLength: 43, maxLength: 43 }))],

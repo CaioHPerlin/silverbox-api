@@ -47,7 +47,9 @@ export async function validateHttpContracts(baseURL: string): Promise<void> {
 		} else if (response.content?.['*/*']) {
 			const bytes = await copy.arrayBuffer()
 			assert.equal(result.headers.get('content-length'), String(bytes.byteLength))
-			assert.match(result.headers.get('content-disposition') ?? '', /^attachment;/)
+			const disposition = response.headers?.['Content-Disposition']?.schema?.pattern
+			if (disposition)
+				assert.match(result.headers.get('content-disposition') ?? '', new RegExp(disposition))
 		} else if (result.status === 204) {
 			assert.equal((await copy.arrayBuffer()).byteLength, 0)
 		}

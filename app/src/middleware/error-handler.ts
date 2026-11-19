@@ -44,7 +44,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
 
   // Erros lançados pela própria aplicação (throw new NotFoundError(...))
   if (err instanceof AppError) {
-    if (err.statusCode >= 500) req.log.error({ err }, err.message);
+    if (err.statusCode >= 500) req.log.error({ err }, "application error");
 
     const body: ErrorBody = { error: err.message };
     if (err.details !== undefined) body.details = err.details;

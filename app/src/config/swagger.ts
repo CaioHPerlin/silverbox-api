@@ -149,6 +149,11 @@ const schemas: Record<string, Schema> = {
 		password: str({ format: 'password', minLength: 8, maxLength: 128 }),
 	}),
 	LoginRequest: object({ email: str({ format: 'email' }), password: str({ format: 'password' }) }),
+	PasswordResetRequest: object(
+		{ email: str({ format: 'email' }), redirectTo: str({ format: 'uri' }) },
+		['email'],
+	),
+	PasswordResetResponse: object({ status: { type: 'boolean' }, message: str() }),
 	AuthResponse: object(
 		{ user: ref('User'), token: str({ nullable: true }), redirect: { type: 'boolean' } },
 		['user', 'token'],
@@ -780,6 +785,40 @@ paths['/api/auth/get-session'] = {
 		{
 			public: true,
 			description: 'O campo user.role contém os papéis registrados pelo Better Auth.',
+		},
+	),
+}
+paths['/api/auth/request-password-reset'] = {
+	post: op(
+		'Auth',
+		'Solicitar recuperação de senha',
+		{
+			200: response(
+				'Solicitação aceita; o corpo é igual para e-mails cadastrados e desconhecidos.',
+				ref('PasswordResetResponse'),
+			),
+			429: {
+				description: 'Limite nativo Better Auth excedido; corpo JSON enviado como text/plain.',
+				headers: {
+					'X-Retry-After': {
+						description: 'Segundos até uma nova tentativa.',
+						schema: str({ pattern: '^\\d+$' }),
+					},
+				},
+				content: {
+					'text/plain': {
+						schema: str({
+							example: '{"message":"Too many requests. Please try again later."}',
+						}),
+					},
+				},
+			},
+		},
+		{
+			public: true,
+			requestBody: body(ref('PasswordResetRequest')),
+			description:
+				'Envio disponível somente quando SMTP está configurado. redirectTo é opcional e precisa usar uma origem confiável. O Better Auth limita a três solicitações por minuto por IP.',
 		},
 	),
 }

@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { pipeline } from 'node:stream/promises'
+import { SharePermission, type File, type SharedLink } from '@prisma/client'
 import { fromNodeHeaders } from 'better-auth/node'
 import { Router, type NextFunction, type Request, type Response } from 'express'
 import { z } from 'zod'
@@ -99,18 +100,22 @@ function uploadHeaders(req: Request) {
 	return { size, name, mimeType }
 }
 
-async function sendDownload(
+async function sendFile(
 	res: Response,
 	storageKey: string,
 	name: string,
 	mimeType: string,
 	size: bigint,
+	disposition: 'attachment' | 'inline' = 'attachment',
 ): Promise<void> {
 	if (!(await storage.exists(storageKey))) throw new HttpError(503, 'Stored file is unavailable')
 	res.setHeader('Content-Type', mimeType)
 	res.setHeader('X-Content-Type-Options', 'nosniff')
 	res.setHeader('Content-Length', size.toString())
-	res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`)
+	res.setHeader(
+		'Content-Disposition',
+		`${disposition}; filename*=UTF-8''${encodeURIComponent(name)}`,
+	)
 	try {
 		await pipeline(await storage.read(storageKey), res)
 	} catch (error) {
@@ -304,7 +309,7 @@ filesRouter.get(
 				details: `file:${file.id}`,
 			},
 		})
-		await sendDownload(res, file.storageKey, file.originalName, file.mimeType, file.sizeBytes)
+		await sendFile(res, file.storageKey, file.originalName, file.mimeType, file.sizeBytes)
 	}),
 )
 
@@ -392,7 +397,7 @@ filesRouter.get(
 				details: `file:${file.id};version:${version.id}`,
 			},
 		})
-		await sendDownload(
+		await sendFile(
 			res,
 			version.storageKey,
 			file.originalName,
@@ -516,35 +521,121 @@ filesRouter.delete(
 	}),
 )
 
+const previewMimeTypes = new Set([
+	'image/avif',
+	'image/gif',
+	'image/jpeg',
+	'image/png',
+	'image/webp',
+	'text/plain',
+])
+
+function requirePreviewable(mimeType: string): void {
+	if (!previewMimeTypes.has(mimeType.toLowerCase()))
+		throw new HttpError(415, 'This file type does not support shared previews')
+}
+
+const shareMetadata = {
+	id: true,
+	permission: true,
+	expiresAt: true,
+	revokedAt: true,
+	createdAt: true,
+} as const
+
+function shareStatus(
+	share: Pick<SharedLink, 'expiresAt' | 'revokedAt'> & {
+		file: Pick<File, 'isDeleted' | 'status'>
+	},
+	now: Date,
+): 'active' | 'expired' | 'revoked' {
+	if (share.revokedAt || share.file.isDeleted || share.file.status !== 'ready') return 'revoked'
+	if (share.expiresAt && share.expiresAt <= now) return 'expired'
+	return 'active'
+}
+
+async function sendSharedFile(
+	req: Request,
+	res: Response,
+	share: SharedLink & { file: File },
+	disposition: 'attachment' | 'inline',
+): Promise<void> {
+	if (shareStatus(share, new Date()) !== 'active')
+		throw new HttpError(410, 'Share is no longer available')
+
+	if (disposition === 'attachment' && share.permission !== 'download')
+		throw new HttpError(403, 'Share does not permit downloads')
+
+	if (disposition === 'inline') {
+		requirePreviewable(share.file.mimeType)
+		res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'")
+		res.setHeader('Referrer-Policy', 'no-referrer')
+	}
+
+	await audit(
+		prisma,
+		share.userId,
+		disposition === 'attachment' ? 'share_download' : 'share_view',
+		requestIp(req),
+		`file:${share.fileId};share:${share.id}`,
+	)
+	await sendFile(
+		res,
+		share.file.storageKey,
+		share.file.originalName,
+		share.file.mimeType,
+		share.file.sizeBytes,
+		disposition,
+	)
+}
+
 filesRouter.post(
 	'/:id/shares',
 	route(async (req, res) => {
 		const owner = await userId(req)
-		const file = await ownedFile(owner, id(req.params.id))
+		const fileId = id(req.params.id)
 		const body = z
-			.object({ expiresInSeconds: z.number().int().min(60).max(604800).default(86400) })
+			.object({
+				expiresInSeconds: z.number().int().min(60).max(604800).nullable().default(86400),
+				permission: z.enum(SharePermission).default('download'),
+			})
 			.strict()
 			.parse(req.body ?? {})
 		const token = randomBytes(32).toString('base64url')
 		const hashed = createHash('sha256').update(token).digest('hex')
-		const expiresAt = new Date(Date.now() + body.expiresInSeconds * 1000)
 		const link = await prisma.$transaction(async (tx) => {
+			// Match the user-before-file lock order of version writes.
+			await tx.$queryRaw`SELECT id FROM silverbox_api.users WHERE id = ${owner} FOR KEY SHARE`
+			// Serialize with trashing, which locks the file before revoking its links.
+			const [file] = await tx.$queryRaw<Array<{ mimeType: string }>>`
+				SELECT mimetype AS "mimeType" FROM silverbox_api.files
+				WHERE id = ${fileId} AND userid = ${owner} AND NOT isdeleted AND status = 'ready'
+				FOR NO KEY UPDATE
+			`
+			if (!file) throw new HttpError(404, 'File not found')
+			if (body.permission === 'view') requirePreviewable(file.mimeType)
+			const expiresAt =
+				body.expiresInSeconds === null
+					? null
+					: new Date(Date.now() + body.expiresInSeconds * 1000)
 			const created = await tx.sharedLink.create({
-				data: { fileId: file.id, userId: owner, token: hashed, expiresAt },
+				data: { fileId, userId: owner, token: hashed, expiresAt, permission: body.permission },
 			})
 			await audit(
 				tx,
 				owner,
 				'share_create',
 				requestIp(req),
-				`file:${file.id};share:${created.id}`,
+				`file:${fileId};share:${created.id}`,
 			)
 			return created
 		})
+		res.setHeader('Cache-Control', 'no-store')
 		res.status(201).json({
 			id: link.id,
-			url: `${env.BETTER_AUTH_URL}/shares/${token}`,
-			expiresAt,
+			url: `${env.BETTER_AUTH_URL}/shares/${token}${link.permission === 'view' ? '/preview' : ''}`,
+			expiresAt: link.expiresAt,
+			permission: link.permission,
 		})
 	}),
 )
@@ -555,9 +646,9 @@ filesRouter.get(
 		const owner = await userId(req)
 		const file = await ownedFile(owner, id(req.params.id), true)
 		const shares = await prisma.sharedLink.findMany({
-			where: { fileId: file.id },
-			select: { id: true, expiresAt: true, revokedAt: true, createdAt: true },
-			orderBy: { createdAt: 'desc' },
+			where: { fileId: file.id, userId: owner },
+			select: shareMetadata,
+			orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
 		})
 		res.json({ shares })
 	}),
@@ -586,39 +677,88 @@ filesRouter.delete(
 	}),
 )
 
+sharesRouter.use((_req, res, next) => {
+	res.setHeader('Cache-Control', 'no-store')
+	next()
+})
+
 sharesRouter.get(
-	'/:token',
+	'/',
 	route(async (req, res) => {
-		const token = req.params.token
-		if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token))
-			throw new HttpError(404, 'Share not found')
-		const hashed = createHash('sha256').update(token).digest('hex')
-		const share = await prisma.sharedLink.findUnique({
-			where: { token: hashed },
+		const owner = await userId(req)
+		const links = await prisma.sharedLink.findMany({
+			where: { userId: owner },
+			orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+			select: {
+				...shareMetadata,
+				user: { select: { id: true, name: true } },
+				file: {
+					select: {
+						id: true,
+						originalName: true,
+						mimeType: true,
+						sizeBytes: true,
+						isDeleted: true,
+						status: true,
+					},
+				},
+			},
+		})
+		const now = new Date()
+		const shares = links.map((link) => {
+			const { user, file, ...metadata } = link
+			return {
+				...metadata,
+				file: {
+					id: file.id,
+					originalName: file.originalName,
+					mimeType: file.mimeType,
+					sizeBytes: Number(file.sizeBytes),
+				},
+				sharedBy: user,
+				status: shareStatus(link, now),
+			}
+		})
+		res.json({ shares })
+	}),
+)
+
+sharesRouter.get(
+	'/:shareId/download',
+	route(async (req, res) => {
+		const owner = await userId(req)
+		const shareId = id(req.params.shareId)
+		const share = await prisma.sharedLink.findFirst({
+			where: { id: shareId, userId: owner },
 			include: { file: true },
 		})
 		if (!share) throw new HttpError(404, 'Share not found')
-		if (
-			share.revokedAt ||
-			share.expiresAt <= new Date() ||
-			share.file.isDeleted ||
-			share.file.status !== 'ready'
-		)
-			throw new HttpError(410, 'Share is no longer available')
-		await prisma.auditLog.create({
-			data: {
-				userId: share.userId,
-				action: 'share_download',
-				ipAddress: requestIp(req),
-				details: `file:${share.fileId};share:${share.id}`,
-			},
-		})
-		await sendDownload(
-			res,
-			share.file.storageKey,
-			share.file.originalName,
-			share.file.mimeType,
-			share.file.sizeBytes,
-		)
+		await sendSharedFile(req, res, share, 'attachment')
+	}),
+)
+
+async function shareByToken(token: string | string[] | undefined) {
+	if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token))
+		throw new HttpError(404, 'Share not found')
+	const hashed = createHash('sha256').update(token).digest('hex')
+	const share = await prisma.sharedLink.findUnique({
+		where: { token: hashed },
+		include: { file: true },
+	})
+	if (!share) throw new HttpError(404, 'Share not found')
+	return share
+}
+
+sharesRouter.get(
+	'/:token',
+	route(async (req, res) => {
+		await sendSharedFile(req, res, await shareByToken(req.params.token), 'attachment')
+	}),
+)
+
+sharesRouter.get(
+	'/:token/preview',
+	route(async (req, res) => {
+		await sendSharedFile(req, res, await shareByToken(req.params.token), 'inline')
 	}),
 )

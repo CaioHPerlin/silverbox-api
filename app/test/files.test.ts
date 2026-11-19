@@ -340,6 +340,185 @@ test('folders, versions, sharing, trash, quota and binary round-trip work togeth
 	}
 })
 
+test('users can list and download their own active shares across files according to permission', async () => {
+	const root = await mkdtemp(join(tmpdir(), 'silverbox-shares-'))
+	const server = await startServer(root)
+	try {
+		await validateHttpContracts(baseURL)
+		const alice = await register('Alice')
+		const bob = await register('Bob')
+		assert.equal((await jsonRequest('/shares', 'GET')).status, 401)
+		assert.deepEqual(await (await jsonRequest('/shares', 'GET', alice.cookie)).json(), {
+			shares: [],
+		})
+
+		const text = Buffer.from('conteúdo compartilhado')
+		const first = await upload('/files', alice.cookie, text, 'primeiro.txt')
+		const second = await upload('/files', alice.cookie, Buffer.from('outro'), 'segundo.txt')
+		const third = await upload('/files', bob.cookie, Buffer.from('privado'), 'terceiro.txt')
+		assert.equal(first.status, 201)
+		assert.equal(second.status, 201)
+		assert.equal(third.status, 201)
+		const firstFile = (await first.json()).file
+		const secondFile = (await second.json()).file
+		const bobFile = (await third.json()).file
+
+		async function createShare(fileId: number, cookie: string, body?: unknown) {
+			const response = await jsonRequest(`/files/${fileId}/shares`, 'POST', cookie, body)
+			assert.equal(response.status, 201)
+			return (await response.json()) as {
+				id: number
+				url: string
+				expiresAt: string | null
+				permission: string
+			}
+		}
+
+		const download = await createShare(firstFile.id, alice.cookie)
+		const view = await createShare(secondFile.id, alice.cookie, {
+			permission: 'view',
+			expiresInSeconds: null,
+		})
+		const expired = await createShare(firstFile.id, alice.cookie)
+		const revoked = await createShare(secondFile.id, alice.cookie)
+		const bobShare = await createShare(bobFile.id, bob.cookie)
+		assert.equal(download.permission, 'download')
+		assert.ok(download.expiresAt)
+		assert.equal(view.permission, 'view')
+		assert.equal(view.expiresAt, null)
+		assert.equal(
+			(await jsonRequest(`/files/${secondFile.id}/shares/${revoked.id}`, 'DELETE', alice.cookie))
+				.status,
+			204,
+		)
+
+		const database = new pg.Client({ connectionString: process.env.DATABASE_URL })
+		await database.connect()
+		try {
+			await database.query(
+				'UPDATE silverbox_api.shared_links SET createdat = $1 WHERE id = ANY($2::int[])',
+				[new Date(), [download.id, view.id, expired.id, revoked.id]],
+			)
+			await database.query(
+				"UPDATE silverbox_api.shared_links SET expiresat = now() - interval '1 second' WHERE id = ANY($1::int[])",
+				[[expired.id, revoked.id]],
+			)
+		} finally {
+			await database.end()
+		}
+
+		const listing = await jsonRequest('/shares', 'GET', alice.cookie)
+		assert.equal(listing.status, 200)
+		assert.equal(listing.headers.get('cache-control'), 'no-store')
+		const { shares } = await listing.json()
+		assert.deepEqual(
+			shares.map((share: { id: number; status: string }) => [share.id, share.status]),
+			[
+				[revoked.id, 'revoked'],
+				[expired.id, 'expired'],
+				[view.id, 'active'],
+				[download.id, 'active'],
+			],
+		)
+		assert.deepEqual(shares[2], {
+			id: view.id,
+			file: {
+				id: secondFile.id,
+				originalName: 'segundo.txt',
+				mimeType: 'text/plain',
+				sizeBytes: 5,
+			},
+			sharedBy: { id: Number(alice.user.id), name: 'Alice' },
+			createdAt: shares[0].createdAt,
+			expiresAt: null,
+			revokedAt: null,
+			permission: 'view',
+			status: 'active',
+		})
+		assert.equal(shares[3].file.id, firstFile.id)
+		const bobListing = await jsonRequest('/shares', 'GET', bob.cookie)
+		assert.deepEqual(
+			(await bobListing.json()).shares.map(({ id }: { id: number }) => id),
+			[bobShare.id],
+		)
+
+		const downloadPath = `/shares/${download.id}/download`
+		assert.equal((await jsonRequest(downloadPath, 'GET')).status, 401)
+		assert.equal((await jsonRequest(downloadPath, 'GET', bob.cookie)).status, 404)
+		const result = await jsonRequest(downloadPath, 'GET', alice.cookie)
+		assert.equal(result.status, 200)
+		assert.deepEqual(Buffer.from(await result.arrayBuffer()), text)
+		for (const [share, status] of [
+			[view, 403],
+			[expired, 410],
+			[revoked, 410],
+		] as const) {
+			assert.equal(
+				(await jsonRequest(`/shares/${share.id}/download`, 'GET', alice.cookie)).status,
+				status,
+			)
+		}
+		assert.equal((await fetch(view.url.replace(/\/preview$/, ''))).status, 403)
+		const preview = await fetch(view.url)
+		assert.equal(preview.status, 200)
+		assert.match(preview.headers.get('content-security-policy') ?? '', /^sandbox/)
+		assert.equal(await preview.text(), 'outro')
+		assert.equal((await fetch(`${expired.url}/preview`)).status, 410)
+
+		const newVersion = await upload(
+			`/files/${secondFile.id}/versions`,
+			alice.cookie,
+			Buffer.from('<html></html>'),
+			'segundo.html',
+			{ 'X-File-Mime': 'text/html' },
+		)
+		assert.equal(newVersion.status, 201)
+		assert.equal((await fetch(view.url)).status, 415)
+		assert.equal(
+			(
+				await jsonRequest(`/files/${secondFile.id}/shares`, 'POST', alice.cookie, {
+					permission: 'view',
+				})
+			).status,
+			415,
+		)
+		assert.equal(
+			(await jsonRequest(`/files/${firstFile.id}`, 'DELETE', alice.cookie)).status,
+			204,
+		)
+		assert.equal((await jsonRequest(downloadPath, 'GET', alice.cookie)).status, 410)
+		assert.equal(
+			(await jsonRequest(`/files/${firstFile.id}/restore`, 'POST', alice.cookie)).status,
+			200,
+		)
+		assert.equal((await jsonRequest(downloadPath, 'GET', alice.cookie)).status, 410)
+
+		const [createdDuringTrash, trashed] = await Promise.all([
+			jsonRequest(`/files/${firstFile.id}/shares`, 'POST', alice.cookie),
+			jsonRequest(`/files/${firstFile.id}`, 'DELETE', alice.cookie),
+		])
+		assert.equal(trashed.status, 204)
+		assert.ok([201, 404].includes(createdDuringTrash.status))
+		assert.equal(
+			(await jsonRequest(`/files/${firstFile.id}/restore`, 'POST', alice.cookie)).status,
+			200,
+		)
+		if (createdDuringTrash.status === 201) {
+			const { url } = await createdDuringTrash.json()
+			assert.equal((await fetch(url)).status, 410)
+		}
+
+		assertOperationsCovered([
+			'GET /shares',
+			'GET /shares/{shareId}/download',
+			'GET /shares/{token}/preview',
+		])
+	} finally {
+		await stopServer(server)
+		await rm(root, { recursive: true, force: true })
+	}
+})
+
 test('concurrent uploads cannot exceed quota; failed upload leaves no reservation; startup reconciles abandoned bytes', async () => {
 	const root = await mkdtemp(join(tmpdir(), 'silverbox-quota-'))
 	let server = await startServer(root)

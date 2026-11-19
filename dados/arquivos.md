@@ -56,13 +56,15 @@ Base local: `http://localhost:8000`. Rotas privadas exigem o cookie de sessão B
 
 ## Compartilhamento e uso
 
-**`POST /files/1/shares`** → Corpo: `{"expiresInSeconds":3600}`; opcional, padrão 86400, intervalo 60–604800. → Resposta `201`: `{"id":1,"url":"http://localhost:8000/shares/<token>","expiresAt":"<data>"}`. O token é mostrado apenas nesta resposta; o banco guarda SHA-256 do token.
+**`POST /files/1/shares`** recebe um corpo opcional, por exemplo `{"expiresInSeconds":3600,"permission":"download"}`, e retorna `201` com `id`, `url`, `expiresAt` e `permission`. A validade padrão é de 86400 segundos, com intervalo de 60 a 604800. Use `null` para um link sem expiração. A permissão padrão é `download`, inclusive para links antigos. A outra opção é `view`. O token fica disponível na URL retornada na criação. O banco guarda seu hash SHA-256.
 
-**`GET /files/1/shares`** → Corpo: nenhum. → Resposta `200`: `{"shares":[{"id":1,"expiresAt":"<data>","revokedAt":null,"createdAt":"<data>"}]}`; tokens não são retornados.
+**`GET /shares`** exige sessão e retorna `200` com os links criados pelo usuário em todos os seus arquivos. Cada item traz `id`, `file` (`id`, `originalName`, `mimeType`, `sizeBytes`), `sharedBy` (`id`, `name`), `createdAt`, `expiresAt`, `revokedAt`, `permission` e `status`. A ordem é decrescente por data de criação e ID. O status é `active`, `expired` ou `revoked`, com prioridade para a revogação. A lixeira revoga os links e a exclusão permanente remove os registros vinculados. A listagem omite as URLs públicas e os tokens.
 
-**`DELETE /files/1/shares/1`** → Corpo: nenhum. → Resposta `204` sem corpo. A revogação passa a valer para a próxima requisição.
+**`GET /files/1/shares`** retorna `200` com `shares`, contendo `id`, `expiresAt`, `revokedAt`, `createdAt` e `permission` de cada link do arquivo. **`DELETE /files/1/shares/1`** revoga o link para as próximas requisições e retorna `204`.
 
-**`GET /shares/<token>`** → Corpo: nenhum; não exige sessão. → Resposta `200`: bytes do arquivo. Token inexistente retorna `404`; expirado, revogado ou associado a arquivo na lixeira retorna `410`.
+**`GET /shares/1/download`** exige sessão e usa o ID retornado na listagem global. Para o criador do link, retorna `200` com os bytes como anexo quando o compartilhamento está ativo e permite download. Retorna `401` sem sessão, `404` para link inexistente ou de outra conta, `410` para link indisponível e `403` para link ativo somente de visualização.
+
+**`GET /shares/<token>`** é o download público. Aplica as mesmas regras de status e permissão, com `404` para token inexistente. Para links de visualização, a URL retornada na criação aponta para **`GET /shares/<token>/preview`**. A prévia serve AVIF, GIF, JPEG, PNG, WebP e texto puro como conteúdo inline em sandbox. A API retorna `415` ao criar um link `view` para um MIME incompatível ou se uma versão posterior tornar a prévia incompatível. A permissão `view` bloqueia os endpoints de download. O destinatário ainda pode salvar o conteúdo entregue ao navegador para prévia.
 
 **`GET /storage/usage`** → Corpo: nenhum. → Resposta `200`: `{"usedBytes":"5","reservedBytes":"0","limitBytes":"1073741824","availableBytes":"1073741819"}`. Os números são strings decimais para não perder precisão de `BIGINT`.
 

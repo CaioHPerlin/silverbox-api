@@ -173,16 +173,18 @@ test('search finds owned files and folders across pages and subfolders', async (
 			repeated.map((item) => item.id),
 			[lower, duplicate].sort((a, b) => a - b),
 		)
-		assert.equal(all.items.find((item) => item.id === upper)?.kind, 'file')
+		const findFile = (id: number) =>
+			all.items.find((item) => item.kind === 'file' && item.id === id)
+		assert.equal(findFile(upper)?.name, 'RELATÓRIO.txt')
 
 		// Local dos resultados.
-		const inAcme = all.items.find((item) => item.id === lower)!
+		const inAcme = findFile(lower)!
 		assert.equal(inAcme.folderId, acme)
 		assert.deepEqual(
 			inAcme.path.map((part) => part.name),
 			['Projetos', 'Clientes', 'Acme Relatórios'],
 		)
-		assert.deepEqual(all.items.find((item) => item.id === anual)?.path, [])
+		assert.deepEqual(findFile(anual)?.path, [])
 		assert.deepEqual(
 			all.items.find((item) => item.kind === 'folder')?.path.map((part) => part.id),
 			[projetos, clientes],
@@ -191,7 +193,10 @@ test('search finds owned files and folders across pages and subfolders', async (
 		// Lixeira só quando pedida.
 		const withTrash = await found(alice, { q: 'relatorio', includeTrash: 'true' })
 		assert.equal(withTrash.total, 6)
-		assert.equal(withTrash.items.find((item) => item.id === trashed)?.isDeleted, true)
+		assert.equal(
+			withTrash.items.find((item) => item.kind === 'file' && item.id === trashed)?.isDeleted,
+			true,
+		)
 
 		// Escopo da pasta atual inclui subpastas e exclui a própria pasta.
 		const scoped = await found(alice, { q: 'relat', scope: 'folder', folderId: projetos })

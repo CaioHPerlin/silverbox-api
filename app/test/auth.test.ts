@@ -35,6 +35,18 @@ async function waitForCondition(predicate: () => boolean, message: string): Prom
 	throw new Error(message)
 }
 
+function getResetLink(message: string): URL {
+	// Nodemailer wraps long text lines and encodes '=' as '=3D' in quoted-printable MIME.
+	const messageText = message
+		.replace(/=\r?\n/g, '')
+		.replace(/=([0-9a-f]{2})/gi, (_match, hex: string) =>
+			String.fromCharCode(Number.parseInt(hex, 16)),
+		)
+	const resetLink = messageText.match(/https?:\/\/[^\s<>]+/)?.[0]
+	assert.ok(resetLink, 'Reset URL was not present in the captured email')
+	return new URL(resetLink)
+}
+
 test('auth signup, signin, session, and signout work with PostgreSQL', async (t) => {
 	const databaseName = `silverbox_auth_${randomUUID().replaceAll('-', '')}`
 	const admin = new pg.Client({ connectionString: process.env.DATABASE_URL })
@@ -229,17 +241,9 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async (t)
 		const requestedBody = await requested.json()
 		assert.equal(requestedBody.status, true)
 		await waitForCondition(() => messages.length === 1, 'Reset email was not captured')
-		// Nodemailer wraps long text lines and encodes '=' as '=3D' in quoted-printable MIME.
-		const messageText = messages[0]!
-			.replace(/=\r?\n/g, '')
-			.replace(/=([0-9a-f]{2})/gi, (_match, hex: string) =>
-				String.fromCharCode(Number.parseInt(hex, 16)),
-			)
-		assert.match(messageText, /Subject: Reset your Silverbox password/)
-		assert.ok(messageText.includes(`To: ${nativeEmail}`))
-		const resetLink = messageText.match(/https?:\/\/[^\s<>]+/)?.[0]
-		assert.ok(resetLink, 'Reset URL was not present in the captured email')
-		const resetUrl = new URL(resetLink)
+		assert.match(messages[0]!, /Subject: Reset your Silverbox password/)
+		assert.ok(messages[0]!.includes(`To: ${nativeEmail}`))
+		const resetUrl = getResetLink(messages[0]!)
 		assert.equal(resetUrl.searchParams.get('callbackURL'), redirectTo)
 		const token = resetUrl.pathname.split('/').at(-1)
 		assert.ok(token)
@@ -340,6 +344,39 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async (t)
 		assert.deepEqual(await limited.json(), {
 			message: 'Too many requests. Please try again later.',
 		})
+
+		const freshRequest = await fetch(`${baseURL}/api/auth/request-password-reset`, {
+			method: 'POST',
+			headers: { ...frontHeaders, 'X-Real-IP': '192.0.2.14' },
+			body: JSON.stringify({ email: nativeEmail, redirectTo }),
+		})
+		assert.equal(freshRequest.status, 200)
+		await waitForCondition(() => messages.length === 2, 'Second reset email was not captured')
+		const freshCallback = await fetch(getResetLink(messages[1]!), { redirect: 'manual' })
+		assert.equal(freshCallback.status, 302)
+		const freshToken = new URL(freshCallback.headers.get('location')!).searchParams.get('token')
+		assert.ok(freshToken)
+		const newPassword = 'updated-silverbox-test-password'
+		const resetPassword = () =>
+			fetch(`${baseURL}/api/auth/reset-password`, {
+				method: 'POST',
+				headers: frontHeaders,
+				body: JSON.stringify({ token: freshToken, newPassword }),
+			})
+		const reset = await resetPassword()
+		assert.equal(reset.status, 200)
+		assert.deepEqual(await reset.json(), { status: true })
+		const reused = await resetPassword()
+		assert.equal(reused.status, 400)
+		assert.equal((await reused.json()).code, 'INVALID_TOKEN')
+		const signInWithPassword = (password: string) =>
+			fetch(`${baseURL}/api/auth/sign-in/email`, {
+				method: 'POST',
+				headers: frontHeaders,
+				body: JSON.stringify({ email: nativeEmail, password }),
+			})
+		assert.equal((await signInWithPassword('correct-horse-battery-staple')).status, 401)
+		assert.equal((await signInWithPassword(newPassword)).status, 200)
 
 		assert.equal(
 			(

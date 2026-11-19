@@ -10,6 +10,8 @@ export const auth = betterAuth({
 	secret: env.BETTER_AUTH_SECRET,
 	trustedOrigins: env.FRONTEND_ORIGINS,
 	emailAndPassword: { enabled: true },
+	// Read current roles and revoked sessions from the database on every request.
+	session: { cookieCache: { enabled: false } },
 	advanced: { database: { generateId: 'serial' } },
 	plugins: [admin({ schema: { user: { fields: { role: 'userRole' } } } })],
 	//The admin plugin is only used for roles. Switch off its ban and impersonation endpoints.

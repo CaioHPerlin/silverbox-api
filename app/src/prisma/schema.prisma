@@ -155,14 +155,23 @@ model SharedLink {
   fileId    Int      @map("fileid")
   userId    Int      @map("userid")
   token     String   @unique(map: "token_link_unq") @db.VarChar
-  expiresAt DateTime @map("expiresat") @db.Timestamp
+  permission SharePermission @default(download)
+  expiresAt DateTime? @map("expiresat") @db.Timestamp
   createdAt DateTime @default(now()) @map("createdat") @db.Timestamp
   revokedAt DateTime? @db.Timestamp
 
   file File @relation(fields: [fileId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fileid")
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "userid")
 
+  @@index([userId, createdAt, id])
   @@map("shared_links")
+  @@schema("silverbox_api")
+}
+
+enum SharePermission {
+  view
+  download
+
   @@schema("silverbox_api")
 }
 

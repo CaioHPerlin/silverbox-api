@@ -166,6 +166,109 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async () 
 	}
 })
 
+test('administrative routes enforce the current role and reject revoked sessions', async () => {
+	const server = spawn(process.execPath, ['dist/server.js'], {
+		cwd: process.cwd(),
+		env: process.env,
+		stdio: 'ignore',
+	})
+
+	function request(path: string, cookie?: string, body?: object) {
+		return fetch(`${baseURL}${path}`, {
+			headers: {
+				Origin: baseURL,
+				...(cookie ? { Cookie: cookie } : {}),
+				...(body ? { 'Content-Type': 'application/json' } : {}),
+			},
+			...(body ? { method: 'POST', body: JSON.stringify(body) } : {}),
+		})
+	}
+
+	async function register(name: string) {
+		const response = await request('/auth/register', undefined, {
+			name,
+			email: `role-${randomUUID()}@example.com`,
+			password: 'correct-horse-battery-staple',
+		})
+		assert.equal(response.status, 200)
+		const cookie = response.headers.get('set-cookie')?.split(';')[0]
+		assert.ok(cookie)
+		return { cookie, id: (await response.json()).user.id as string }
+	}
+
+	try {
+		await waitForServer(server)
+		await validateHttpContracts(baseURL)
+		const operator = await register('Operator')
+		const member = await register('Member')
+		const database = new pg.Client({ connectionString: process.env.DATABASE_URL })
+		await database.connect()
+		try {
+			const result = await database.query(
+				"UPDATE silverbox_api.users SET user_role = 'admin' WHERE id = $1",
+				[operator.id],
+			)
+			assert.equal(result.rowCount, 1)
+		} finally {
+			await database.end()
+		}
+
+		const listUsers = '/api/auth/admin/list-users'
+		const setRole = '/api/auth/admin/set-role'
+		const revokeSessions = '/api/auth/admin/revoke-user-sessions'
+		const readNativeSession = '/api/auth/get-session'
+		const roleChange = { userId: member.id, role: ['user', 'admin'] }
+		const revocation = { userId: member.id }
+		const anonymous = await request(listUsers)
+		assert.equal(anonymous.status, 401)
+		assert.equal(await anonymous.text(), '')
+		assert.equal((await request(setRole, undefined, roleChange)).status, 401)
+		assert.equal((await request(revokeSessions, undefined, revocation)).status, 401)
+		assert.equal(await (await request(readNativeSession)).json(), null)
+
+		assert.equal((await (await request('/users/me', member.cookie)).json()).user.role, 'user')
+		assert.equal((await request(listUsers, member.cookie)).status, 403)
+		assert.equal((await request(setRole, member.cookie, roleChange)).status, 403)
+		assert.equal((await request(revokeSessions, member.cookie, revocation)).status, 403)
+
+		assert.equal((await (await request('/users/me', operator.cookie)).json()).user.role, 'admin')
+		const list = await request(`${listUsers}?limit=10&offset=1`, operator.cookie)
+		assert.equal(list.status, 200)
+		const page = await list.json()
+		assert.equal(page.limit, 10)
+		assert.equal(page.offset, 1)
+		assert.ok(page.total >= 2)
+
+		assert.equal((await request(setRole, operator.cookie, roleChange)).status, 200)
+		const profile = await request('/users/me', member.cookie)
+		assert.equal(profile.headers.get('cache-control'), 'no-store')
+		assert.equal((await profile.json()).user.role, 'admin')
+		assert.equal(
+			(await (await request(readNativeSession, member.cookie)).json()).user.role,
+			'user,admin',
+		)
+		assert.equal((await request(listUsers, member.cookie)).status, 200)
+
+		assert.equal(
+			(await request(setRole, operator.cookie, { ...roleChange, role: 'user' })).status,
+			200,
+		)
+		assert.equal((await (await request('/users/me', member.cookie)).json()).user.role, 'user')
+		assert.equal((await request(listUsers, member.cookie)).status, 403)
+
+		const revoked = await request(revokeSessions, operator.cookie, revocation)
+		assert.equal(revoked.status, 200)
+		assert.deepEqual(await revoked.json(), { success: true })
+		assert.equal((await request('/users/me', member.cookie)).status, 401)
+		assert.equal((await request(listUsers, member.cookie)).status, 401)
+		assert.equal(await (await request(readNativeSession, member.cookie)).json(), null)
+		assertOperationsCovered([`GET ${listUsers}`, `POST ${setRole}`, `POST ${revokeSessions}`])
+	} finally {
+		server.kill('SIGTERM')
+		if (server.exitCode === null) await once(server, 'exit')
+	}
+})
+
 test('invalid auth and database configuration fails with readable errors', () => {
 	const result = spawnSync(process.execPath, ['dist/server.js'], {
 		cwd: process.cwd(),

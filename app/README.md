@@ -97,6 +97,35 @@ Veja [`../dados/arquivos.md`](../dados/arquivos.md) para **endpoint → corpo �
 
 Google é opcional. Preencha as duas credenciais e configure o redirect URI `http://localhost:8000/api/auth/callback/google` no Google Cloud. Comece pelo navegador em `/auth/google`, mantendo o cookie de estado. Em produção use `${BETTER_AUTH_URL}/api/auth/callback/google`, com a origem HTTPS correta. Sem credenciais, `/auth/google` retorna `400` legível e o login por senha continua funcionando.
 
+### Sessão e autorização administrativa
+
+`GET /users/me` retorna `user.role` como `user` ou `admin`. Na rota nativa `GET /api/auth/get-session`, o Better Auth retorna os papéis persistidos, por exemplo `user,admin` quando a conta tem os dois, ou `null` sem sessão. Use o papel efetivo de `/users/me` para exibir recursos administrativos. O servidor verifica a permissão em cada chamada.
+
+| Requisição | Sem sessão ou sessão revogada | Sessão `user` | Sessão `admin` |
+| --- | --- | --- | --- |
+| `GET /users/me` | `401` | `200`, papel `user` | `200`, papel `admin` |
+| `GET /api/auth/admin/list-users` | `401` | `403` | `200`, lista e total |
+| `POST /api/auth/admin/set-role` | `401` | `403` | `200`, papel alterado com corpo válido |
+| `POST /api/auth/admin/revoke-user-sessions` | `401` | `403` | `200`, sessões revogadas com corpo válido |
+
+O Better Auth consulta o banco para ler a sessão e o papel. Promover ou rebaixar um usuário muda a autorização na próxima requisição, inclusive para cookies já emitidos. Revogar as sessões invalida esses cookies.
+
+As três rotas administrativas da tabela respondem sem corpo no `401`. No `403`, o Better Auth retorna o erro em JSON.
+
+Para provisionar o primeiro admin em um **banco local de teste**, cadastre uma conta descartável via Swagger e informe o e-mail dessa conta. Use a URL do banco local já configurada em `DATABASE_URL`.
+
+```sh
+read -r admin_email
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -v admin_email="$admin_email" <<'SQL'
+UPDATE silverbox_api.users
+SET user_role = 'admin', updatedat = CURRENT_TIMESTAMP
+WHERE email = :'admin_email'
+RETURNING id, user_role;
+SQL
+```
+
+Confira `UPDATE 1` e consulte `GET /users/me` com a sessão da conta. Com o administrador autenticado, use `POST /api/auth/admin/set-role` com `userId` (ID textual) e `role` (`admin` ou `user`) para mudar o papel de uma segunda conta e conferir a resposta dessa conta em `list-users`. Use `POST /api/auth/admin/revoke-user-sessions` com o mesmo `userId` para verificar a invalidação do cookie.
+
 ## Verificação
 
 ```sh

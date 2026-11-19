@@ -3,6 +3,7 @@ import { fromNodeHeaders } from 'better-auth/node'
 import { Router, type NextFunction, type Request, type Response } from 'express'
 import { auth } from '../lib/auth.js'
 import { env } from '../config/env.js'
+import { effectiveUserRole } from '../middleware/auth.js'
 
 export const authRouter = Router()
 export const usersRouter = Router()
@@ -107,7 +108,8 @@ usersRouter.get('/me', async (req: Request, res: Response, next: NextFunction) =
 			res.status(401).json({ error: 'Unauthorized' })
 			return
 		}
-		res.json({ user: session.user })
+		res.setHeader('Cache-Control', 'no-store')
+		res.json({ user: { ...session.user, role: effectiveUserRole(session.user.role) } })
 	} catch (error) {
 		next(error)
 	}

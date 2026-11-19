@@ -97,6 +97,13 @@ const op = (
 const name = str({ minLength: 1, maxLength: 255, example: 'documento.pdf' })
 const sharePermission = str({ enum: ['view', 'download'] })
 const shareExpiry = { ...date, nullable: true }
+const userRole = str({ enum: ['user', 'admin'] })
+const userId = str({ pattern: '^\\d+$', example: '1' })
+const adminUnauthorized = response('Sessão ausente ou inválida; sem corpo')
+const adminForbidden = response(
+	'Sessão sem permissão administrativa ou origem não permitida',
+	ref('Error'),
+)
 const folderId = integer({ minimum: 1, nullable: true, example: null })
 const uploadHeaders = [
 	param(
@@ -124,16 +131,18 @@ const uploadHeaders = [
 const schemas: Record<string, Schema> = {
 	User: object(
 		{
-			id: str({ example: '1' }),
+			id: userId,
 			name: str(),
 			email: str({ format: 'email' }),
 			emailVerified: { type: 'boolean' },
 			image: str({ nullable: true }),
+			role: str({ description: 'Papéis registrados pelo Better Auth, separados por vírgula.' }),
 			createdAt: date,
 			updatedAt: date,
 		},
 		['id', 'name', 'email'],
 	),
+	SessionUser: { allOf: [ref('User'), object({ role: userRole })] },
 	RegisterRequest: object({
 		name: str({ minLength: 1, maxLength: 155 }),
 		email: str({ format: 'email' }),
@@ -339,9 +348,67 @@ const paths: Record<string, unknown> = {
 		),
 	},
 	'/users/me': {
-		get: op('Auth', 'Consultar usuário autenticado', {
-			200: response('Usuário atual', object({ user: ref('User') })),
-		}),
+		get: op(
+			'Auth',
+			'Consultar usuário autenticado e seu papel efetivo',
+			{ 200: response('Usuário atual', object({ user: ref('SessionUser') })) },
+			{ description: 'Retorna admin quando a conta tem esse papel e user nos demais casos.' },
+		),
+	},
+	'/api/auth/admin/list-users': {
+		get: op(
+			'Admin',
+			'Listar usuários com uma sessão administrativa',
+			{
+				200: response(
+					'Usuários e contagem',
+					object(
+						{
+							users: array(ref('User')),
+							total: integer(),
+							limit: integer(),
+							offset: integer(),
+						},
+						['users', 'total'],
+					),
+				),
+				401: adminUnauthorized,
+				403: adminForbidden,
+			},
+			{
+				parameters: [
+					param('limit', 'query', integer({ minimum: 1 })),
+					param('offset', 'query', integer({ minimum: 0 })),
+				],
+			},
+		),
+	},
+	'/api/auth/admin/set-role': {
+		post: op(
+			'Admin',
+			'Alterar os papéis de um usuário',
+			{
+				200: response('Usuário atualizado', object({ user: ref('User') })),
+				401: adminUnauthorized,
+				403: adminForbidden,
+			},
+			{
+				requestBody: body(object({ userId, role: { oneOf: [userRole, array(userRole)] } })),
+				description: 'Sessões existentes passam a usar os novos papéis na próxima requisição.',
+			},
+		),
+	},
+	'/api/auth/admin/revoke-user-sessions': {
+		post: op(
+			'Admin',
+			'Revogar todas as sessões de um usuário',
+			{
+				200: response('Sessões revogadas', object({ success: { type: 'boolean' } })),
+				401: adminUnauthorized,
+				403: adminForbidden,
+			},
+			{ requestBody: body(object({ userId })) },
+		),
 	},
 	'/auth/google': {
 		get: op(
@@ -710,7 +777,10 @@ paths['/api/auth/get-session'] = {
 				properties: { user: ref('User'), session: { type: 'object' } },
 			}),
 		},
-		{ public: true },
+		{
+			public: true,
+			description: 'O campo user.role contém os papéis registrados pelo Better Auth.',
+		},
 	),
 }
 
@@ -724,9 +794,11 @@ export const swaggerSpec = swaggerJsdoc({
 				'Entre por /auth/register ou /auth/login no Try it out para usar a sessão HttpOnly. Use o mesmo hostname em todas as chamadas. Uploads recebem bytes brutos, não multipart. Em HTTPS o cookie usa o prefixo __Secure-. O deploy permite CORS de origens HTTP(S), refletindo Origin com credenciais; isso não dispensa sessão nem autoriza acesso a arquivos de terceiros. Para desenvolver o front no localhost contra esta API, use o proxy /__api do Vite em silverbox-web; cookies SameSite=Lax não são enviados diretamente entre sites distintos. Origens de autenticação direta continuam configuradas em FRONTEND_ORIGINS.',
 		},
 		servers: [{ url: env.BETTER_AUTH_URL, description: 'Origem pública configurada' }],
-		tags: ['Auth', 'Folders', 'Files', 'Search', 'Shares', 'Storage', 'Health'].map((name) => ({
-			name,
-		})),
+		tags: ['Auth', 'Admin', 'Folders', 'Files', 'Search', 'Shares', 'Storage', 'Health'].map(
+			(name) => ({
+				name,
+			}),
+		),
 		components: {
 			securitySchemes: {
 				sessionCookie: {

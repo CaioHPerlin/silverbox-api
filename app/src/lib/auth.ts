@@ -16,14 +16,15 @@ export const auth = betterAuth({
 	},
 	emailAndPassword: {
 		enabled: true,
-		resetPasswordTokenExpiresIn: 3600,
+		resetPasswordTokenExpiresIn: 15 * 60,
+		revokeSessionsOnPasswordReset: true,
 		...(smtpConfigured
 			? {
 					sendResetPassword: async ({ user, url }) => {
 						void sendEmail({
 							to: user.email,
 							subject: 'Reset your Silverbox password',
-							text: `Hello ${user.name},\n\nUse this link to reset your Silverbox password. It expires in one hour.\n\n${url}\n`,
+							text: `Hello ${user.name},\n\nUse this link to reset your Silverbox password. It expires in 15 minutes.\n\n${url}\n`,
 						}).catch(() => {
 							console.error('[MAIL] Password reset email delivery failed')
 						})

@@ -256,7 +256,7 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async (t)
 			)
 			assert.equal(rows.length, 1)
 			const expiry = Number(rows[0]!.expiry_ms)
-			assert.ok(expiry - Date.now() > 3500_000 && expiry - Date.now() <= 3600_000)
+			assert.ok(expiry - Date.now() > 840_000 && expiry - Date.now() <= 900_000)
 		} finally {
 			await verificationDb.end()
 		}
@@ -366,6 +366,10 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async (t)
 		const reset = await resetPassword()
 		assert.equal(reset.status, 200)
 		assert.deepEqual(await reset.json(), { status: true })
+		const previousSession = await fetch(`${baseURL}/users/me`, {
+			headers: { Cookie: nativeCookie },
+		})
+		assert.equal(previousSession.status, 401)
 		const reused = await resetPassword()
 		assert.equal(reused.status, 400)
 		assert.equal((await reused.json()).code, 'INVALID_TOKEN')

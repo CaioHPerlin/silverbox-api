@@ -71,6 +71,10 @@ authRouter.post('/logout', (req, res, next) =>
 	),
 )
 
+authRouter.get('/providers', (_req, res) => {
+	res.json({ google: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) })
+})
+
 authRouter.get(
 	'/google',
 	(_req, res, next) => {

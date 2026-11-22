@@ -56,7 +56,7 @@ const errors = (statuses: number[]) =>
 						409: 'Conflito: pasta não vazia, ciclo ou estado incompatível',
 						410: 'Link expirado, revogado ou arquivo indisponível',
 						413: 'Limite por arquivo ou cota individual excedido',
-						415: 'Use application/octet-stream',
+						415: 'Tipo ou codificação do corpo incompatível com a operação',
 						429: 'Transferências simultâneas excedidas; Retry-After: 1',
 						500: 'Falha interna',
 						503: 'Banco ou armazenamento indisponível',
@@ -394,7 +394,7 @@ const paths: Record<string, unknown> = {
 			'Alterar os papéis de um usuário',
 			{
 				200: response('Usuário atualizado', object({ user: ref('User') })),
-				401: adminUnauthorized,
+				409: response('A operação removeria o último administrador ativo', ref('Error')),
 				403: adminForbidden,
 			},
 			{
@@ -696,16 +696,29 @@ const paths: Record<string, unknown> = {
 	'/shares': {
 		get: op(
 			'Shares',
-			'Listar compartilhamentos criados pelo usuário autenticado',
+			'Listar links criados pelo usuário',
 			{
 				200: response(
-					'Links de todos os arquivos',
-					object({ shares: array(ref('UserShare')) }),
+					'Links e metadados de paginação quando solicitados',
+					object(
+						{
+							shares: array(ref('UserShare')),
+							page: integer(),
+							limit: integer(),
+							total: integer(),
+						},
+						['shares'],
+					),
 				),
 			},
 			{
+				parameters: [
+					param('page', 'query', integer({ minimum: 1, maximum: 10000, default: 1 })),
+					param('limit', 'query', integer({ minimum: 1, maximum: 100, default: 50 })),
+					param('q', 'query', str({ maxLength: 155 }), false, 'Busca por nome do arquivo.'),
+				],
 				description:
-					'Ordena do mais recente ao mais antigo, com desempate por ID decrescente. Inclui links expirados e revogados. A revogação tem prioridade sobre a expiração. Tokens e URLs públicas são omitidos.',
+					'Sem parâmetros, preserva a resposta { shares }. Com parâmetros, ordena por criação e ID decrescentes e devolve apenas a página solicitada. A resposta não contém tokens.',
 			},
 		),
 	},
@@ -818,8 +831,253 @@ paths['/api/auth/request-password-reset'] = {
 			public: true,
 			requestBody: body(ref('PasswordResetRequest')),
 			description:
-				'Envio disponível somente quando SMTP está configurado. redirectTo é opcional e precisa usar uma origem confiável. O Better Auth limita a três solicitações por minuto por IP.',
+				'Token de uso único com validade de 15 minutos. A redefinição revoga as sessões existentes. Envio disponível somente quando SMTP está configurado. redirectTo é opcional e precisa usar uma origem confiável. O Better Auth limita a três solicitações por minuto por IP.',
 		},
+	),
+}
+
+const decimalBytes = str({ pattern: '^-?\\d+$', description: 'Quantidade de bytes em decimal.' })
+const pagination = [
+	param('page', 'query', integer({ minimum: 1, maximum: 10000, default: 1 })),
+	param('limit', 'query', integer({ minimum: 1, maximum: 100, default: 50 })),
+]
+const searchTerm = param('q', 'query', str({ maxLength: 155 }))
+const paging = (key: string, item: Schema) =>
+	object({ [key]: array(item), page: integer(), limit: integer(), total: integer() })
+const adminUser = object({
+	id: userId,
+	name,
+	email: str({ format: 'email' }),
+	role: str(),
+	banned: { type: 'boolean', nullable: true },
+	deletionPending: { type: 'boolean' },
+	quotaLimitBytes: decimalBytes,
+	createdAt: date,
+})
+const adminAccountChange = object(
+	{
+		role: userRole,
+		banned: { type: 'boolean' },
+		quotaLimitBytes: str({ pattern: '^[1-9]\\d{0,18}$' }),
+	},
+	[],
+)
+const adminFile = {
+	allOf: [
+		ref('File'),
+		object({
+			ownerId: integer(),
+			ownerName: name,
+			ownerEmail: str({ format: 'email' }),
+		}),
+	],
+}
+const auditLog = object({
+	id: integer(),
+	createdAt: date,
+	userId: integer({ nullable: true }),
+	actorName: str({ nullable: true }),
+	actorEmail: str({ nullable: true }),
+	action: str(),
+	ipAddress: str(),
+	requestId: str({ nullable: true }),
+	details: str({ nullable: true }),
+})
+const auditParams = [
+	param('since', 'query', date, false, 'Início inclusivo.'),
+	param('until', 'query', date, false, 'Fim exclusivo.'),
+	param('userId', 'query'),
+	param('action', 'query', str({ maxLength: 80 })),
+]
+const queuedDeletion = response(
+	'Exclusão iniciada; resta limpeza no armazenamento',
+	object({ status: str({ enum: ['deleting'] }) }),
+)
+
+paths['/auth/providers'] = {
+	get: op(
+		'Auth',
+		'Consultar os provedores habilitados',
+		{
+			200: response('Disponibilidade dos provedores', object({ google: { type: 'boolean' } })),
+		},
+		{ public: true },
+	),
+}
+paths['/users/me/avatar'] = {
+	get: op('Auth', 'Ler o avatar da conta autenticada', {
+		200: {
+			description: 'Avatar privado normalizado em WebP',
+			content: { 'image/webp': { schema: str({ format: 'binary' }) } },
+		},
+	}),
+	post: op(
+		'Auth',
+		'Salvar ou substituir o avatar',
+		{
+			200: response(
+				'Referência gerenciada e bytes contabilizados',
+				object({ image: str(), sizeBytes: decimalBytes }),
+			),
+		},
+		{
+			description:
+				'Envie uma imagem JPEG, PNG ou WebP no corpo cru, até 2 MiB. O servidor valida e normaliza o conteúdo.',
+			requestBody: {
+				required: true,
+				content: Object.fromEntries(
+					['image/jpeg', 'image/png', 'image/webp'].map((mime) => [
+						mime,
+						{ schema: str({ format: 'binary' }) },
+					]),
+				),
+			},
+			errors: [413, 415, 507],
+		},
+	),
+	delete: op('Auth', 'Remover o avatar e liberar a cota correspondente', {
+		204: response('Avatar removido'),
+	}),
+}
+paths['/admin/users'] = {
+	get: op(
+		'Admin',
+		'Listar contas e cotas',
+		{ 200: response('Contas paginadas', paging('users', adminUser)) },
+		{ parameters: [...pagination, searchTerm] },
+	),
+	post: op(
+		'Admin',
+		'Criar uma conta',
+		{ 201: response('Conta criada', object({ user: ref('User') })) },
+		{
+			requestBody: body(
+				object(
+					{
+						name,
+						email: str({ format: 'email' }),
+						password: str({ minLength: 8, maxLength: 128 }),
+						role: userRole,
+					},
+					['name', 'email', 'password'],
+				),
+			),
+		},
+	),
+}
+paths['/admin/users/{id}'] = {
+	patch: op(
+		'Admin',
+		'Alterar papel, cota ou bloqueio de uma conta',
+		{
+			200: response('Conta atualizada', object({ user: adminUser })),
+		},
+		{ parameters: ids, requestBody: body(adminAccountChange), errors: [409] },
+	),
+	delete: op(
+		'Admin',
+		'Excluir conta, arquivos e sessões',
+		{
+			204: response('Conta removida'),
+			202: queuedDeletion,
+		},
+		{ parameters: ids, errors: [409] },
+	),
+}
+paths['/admin/files'] = {
+	get: op(
+		'Admin',
+		'Listar arquivos com o proprietário',
+		{ 200: response('Arquivos paginados', paging('files', adminFile)) },
+		{
+			parameters: [
+				...pagination,
+				searchTerm,
+				param('trash', 'query', str({ enum: ['true', 'false'] })),
+			],
+		},
+	),
+}
+paths['/admin/files/{id}'] = {
+	delete: op(
+		'Admin',
+		'Mover arquivo para a lixeira e revogar os links',
+		{ 204: response('Movido para a lixeira') },
+		{ parameters: ids, errors: [409] },
+	),
+}
+paths['/admin/files/{id}/download'] = {
+	get: op(
+		'Admin',
+		'Baixar um arquivo com registro de auditoria',
+		{ 200: binaryResponse },
+		{ parameters: ids, errors: [503] },
+	),
+}
+paths['/admin/files/{id}/permanent'] = {
+	delete: op(
+		'Admin',
+		'Expurgar um arquivo da lixeira e liberar a cota',
+		{
+			204: response('Arquivo expurgado'),
+			202: queuedDeletion,
+		},
+		{ parameters: ids, errors: [409] },
+	),
+}
+paths['/admin/audit'] = {
+	get: op(
+		'Admin',
+		'Listar eventos de auditoria',
+		{ 200: response('Eventos paginados', paging('logs', auditLog)) },
+		{ parameters: [...pagination, ...auditParams] },
+	),
+}
+paths['/admin/audit/export'] = {
+	get: op(
+		'Admin',
+		'Exportar os eventos filtrados em CSV',
+		{
+			200: {
+				description: 'CSV UTF-8 por streaming',
+				content: { 'text/csv': { schema: str({ format: 'binary' }) } },
+			},
+		},
+		{ parameters: auditParams },
+	),
+}
+paths['/admin/stats'] = {
+	get: op(
+		'Admin',
+		'Consultar métricas globais e tráfego diário',
+		{
+			200: response(
+				'Resumo e série diária UTC',
+				object({
+					users: object({ total: integer(), admins: integer(), blocked: integer() }),
+					files: object({ active: integer(), trash: integer() }),
+					storage: object({
+						usedBytes: decimalBytes,
+						trashBytes: decimalBytes,
+						reservedBytes: decimalBytes,
+						limitBytes: decimalBytes,
+						availableBytes: decimalBytes,
+						diskAvailableBytes: decimalBytes,
+						diskTotalBytes: decimalBytes,
+					}),
+					traffic: array(
+						object({
+							day: str({ format: 'date' }),
+							uploads: integer(),
+							downloads: integer(),
+							uploadBytes: decimalBytes,
+							downloadBytes: decimalBytes,
+						}),
+					),
+				}),
+			),
+		},
+		{ parameters: [param('days', 'query', str({ enum: ['7', '30'], default: '7' }))] },
 	),
 }
 

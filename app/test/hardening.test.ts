@@ -325,3 +325,202 @@ test('production requires explicit storage root and global budget', () => {
 	assert.match(result.stderr, /STORAGE_ROOT is required in production/)
 	assert.match(result.stderr, /STORAGE_MAX_BYTES is required in production/)
 })
+
+test('admin contracts join accounts, storage operations, audit and metrics without changing ownership', async () => {
+	const f = await fixture()
+	const db = new pg.Client({ connectionString: f.environment.DATABASE_URL })
+	const password = 'correct-horse-battery-staple'
+	const request = (path: string, cookie?: string, method = 'GET', body?: unknown) =>
+		fetch(baseURL + path, {
+			method,
+			headers: { ...authHeaders, ...(cookie ? { Cookie: cookie } : {}) },
+			...(body === undefined ? {} : { body: JSON.stringify(body) }),
+		})
+
+	try {
+		await f.start()
+		await db.connect()
+		const operator = await signup()
+		const operatorAccount = (await (await request('/users/me', operator)).json()).user
+		await db.query("UPDATE silverbox_api.users SET user_role = 'admin' WHERE id = $1", [
+			operatorAccount.id,
+		])
+		const email = `admin-target-${randomUUID()}@example.com`
+		const create = await request('/admin/users', operator, 'POST', {
+			name: '=Pessoa de teste',
+			email,
+			password,
+		})
+		assert.equal(create.status, 201, await create.clone().text())
+		const target = (await create.json()).user
+		const signedIn = await request('/auth/login', undefined, 'POST', { email, password })
+		assert.equal(signedIn.status, 200)
+		const owner = signedIn.headers.get('set-cookie')!.split(';')[0]!
+
+		assert.equal((await request('/admin/users')).status, 401)
+		assert.equal((await request('/admin/users', owner)).status, 403)
+		assert.equal(
+			(await request(`/admin/users/${operatorAccount.id}`, operator, 'PATCH', { role: 'user' }))
+				.status,
+			409,
+		)
+		assert.equal(
+			(await request(`/admin/users/${operatorAccount.id}`, operator, 'DELETE')).status,
+			409,
+		)
+		const filter = `/admin/users?q=${encodeURIComponent(email)}&page=1&limit=1`
+		const page = await (await request(filter, operator)).json()
+		assert.equal(page.total, 1)
+		assert.equal(page.users[0].id, String(target.id))
+		assert.equal(typeof page.users[0].quotaLimitBytes, 'string')
+
+		const sent = await upload(owner)
+		assert.equal(sent.status, 201, await sent.clone().text())
+		const file = (await sent.json()).file
+		const ownerFileRoute = `/files/${file.id}`
+		const adminFileRoute = `/admin/files/${file.id}`
+		assert.equal((await request(ownerFileRoute, operator)).status, 404)
+		assert.equal((await request(`${adminFileRoute}/download`, owner)).status, 403)
+		const adminDownload = await request(`${adminFileRoute}/download`, operator)
+		assert.equal(adminDownload.status, 200)
+		assert.equal(await adminDownload.text(), '1234')
+		const filePage = await (
+			await request(`/admin/files?q=${encodeURIComponent(email)}`, operator)
+		).json()
+		assert.equal(filePage.files[0].ownerEmail, email)
+		assert.equal(filePage.files[0].id, file.id)
+
+		const change = `/admin/users/${target.id}`
+		assert.equal((await request(change, operator, 'PATCH', { quotaLimitBytes: '3' })).status, 409)
+		assert.equal(
+			(await request(change, operator, 'PATCH', { quotaLimitBytes: '1048576' })).status,
+			200,
+		)
+		const shareRoute = `${ownerFileRoute}/shares`
+		for (let i = 0; i < 2; i++) {
+			assert.equal(
+				(await request(shareRoute, owner, 'POST', { expiresInSeconds: 600 })).status,
+				201,
+			)
+		}
+		const first = await (await request('/shares?page=1&limit=1', owner)).json()
+		const second = await (await request('/shares?page=2&limit=1', owner)).json()
+		assert.equal(first.total, 2)
+		assert.equal(first.shares.length, 1)
+		assert.ok(first.shares[0].id > second.shares[0].id)
+		assert.equal('token' in first.shares[0], false)
+		assert.deepEqual((await (await request('/shares?limit=1', operator)).json()).shares, [])
+		assert.equal((await request('/shares?limit=101', owner)).status, 400)
+
+		assert.equal((await request(`${adminFileRoute}/permanent`, operator, 'DELETE')).status, 409)
+		assert.equal((await request(adminFileRoute, operator, 'DELETE')).status, 204)
+		const trash = await (await request('/admin/files?trash=true', operator)).json()
+		assert.equal(trash.files[0].id, file.id)
+		const stats = await (await request('/admin/stats?days=7', operator)).json()
+		assert.equal(stats.files.trash, 1)
+		assert.equal(stats.storage.trashBytes, '4')
+		assert.equal(stats.traffic.length, 7)
+		assert.equal(stats.traffic.at(-1).uploadBytes, '4')
+		assert.equal(stats.traffic[0].uploadBytes, '0')
+		assert.equal((await request('/admin/stats', owner)).status, 403)
+		assert.equal((await request(`${adminFileRoute}/permanent`, operator, 'DELETE')).status, 204)
+		assert.equal((await request('/shares', owner).then((r) => r.json())).shares.length, 0)
+
+		assert.equal((await upload(owner)).status, 201)
+		assert.equal((await request(change, operator, 'PATCH', { banned: true })).status, 200)
+		assert.equal((await request('/users/me', owner)).status, 401)
+		assert.equal(
+			(await request('/auth/login', undefined, 'POST', { email, password })).status,
+			403,
+		)
+		assert.equal((await request(change, operator, 'PATCH', { banned: false })).status, 200)
+		assert.equal(
+			(await request('/auth/login', undefined, 'POST', { email, password })).status,
+			200,
+		)
+		assert.equal((await request(change, operator, 'DELETE')).status, 204)
+		assert.equal((await request(change, operator, 'PATCH', { banned: false })).status, 404)
+		assert.deepEqual(await readdir(join(f.root, 'objects', String(target.id))), [])
+
+		const filterAudit = `userId=${target.id}&action=upload`
+		const logs = await (await request(`/admin/audit?${filterAudit}&limit=1`, operator)).json()
+		assert.equal(logs.total, 2)
+		assert.equal(logs.logs.length, 1)
+		assert.equal(logs.logs[0].actorEmail, email)
+		assert.match(logs.logs[0].requestId, /^[a-f0-9-]{36}$/)
+		const exported = await request(`/admin/audit/export?${filterAudit}`, operator)
+		assert.equal(exported.status, 200)
+		assert.match(exported.headers.get('content-type') ?? '', /^text\/csv/)
+		assert.match(await exported.text(), /"'=Pessoa de teste"/)
+		assert.equal((await request('/admin/audit/export')).status, 401)
+	} finally {
+		await db.end()
+		await f.close()
+	}
+})
+
+test('avatar is private, decoded, billed once on replacement and released on removal', async () => {
+	const f = await fixture()
+	try {
+		await f.start()
+		const cookie = await signup()
+		const avatar = baseURL + '/users/me/avatar'
+		const { default: sharp } = await import('sharp')
+		const image = await sharp({
+			create: { width: 5, height: 5, channels: 3, background: '#336699' },
+		})
+			.png()
+			.toBuffer()
+		const save = (bytes: Buffer, mime = 'image/png') =>
+			fetch(avatar, {
+				method: 'POST',
+				headers: { Origin: baseURL, Cookie: cookie, 'Content-Type': mime },
+				body: bytes,
+			})
+		const used = async () => {
+			const response = await fetch(baseURL + '/storage/usage', { headers: { Cookie: cookie } })
+			return (await response.json()).usedBytes
+		}
+		assert.equal(await used(), '0')
+		assert.equal((await save(Buffer.from('not a PNG'))).status, 415)
+		assert.equal((await save(image, 'image/jpeg')).status, 415)
+		assert.equal((await save(Buffer.alloc(2 * 1024 * 1024 + 1))).status, 413)
+		const result = await save(image)
+		assert.equal(result.status, 200, await result.clone().text())
+		const data = await result.json()
+		assert.match(data.image, /^\/users\/me\/avatar\?v=[0-9a-f]{16}$/)
+		assert.equal(await used(), data.sizeBytes)
+		assert.equal((await fetch(avatar)).status, 401)
+		const other = await signup()
+		assert.equal((await fetch(avatar, { headers: { Cookie: other } })).status, 404)
+		const loaded = await fetch(baseURL + data.image, { headers: { Cookie: cookie } })
+		assert.equal(loaded.status, 200)
+		assert.equal(loaded.headers.get('content-type'), 'image/webp')
+		assert.equal((await loaded.arrayBuffer()).byteLength, Number(data.sizeBytes))
+		const session = await fetch(baseURL + '/users/me', { headers: { Cookie: cookie } })
+		assert.equal((await session.json()).user.image, data.image)
+		const updateUser = await fetch(baseURL + '/api/auth/update-user', {
+			method: 'POST',
+			headers: { ...authHeaders, Cookie: cookie },
+			body: JSON.stringify({ image: 'https://example.com/avatar.png' }),
+		})
+		assert.equal(updateUser.status, 400)
+		const renamed = await fetch(baseURL + '/api/auth/update-user', {
+			method: 'POST',
+			headers: { ...authHeaders, Cookie: cookie },
+			body: JSON.stringify({ name: 'Novo nome' }),
+		})
+		assert.equal(renamed.status, 200)
+		assert.equal((await save(image)).status, 200)
+		assert.equal(await used(), data.sizeBytes)
+		assert.equal(
+			(await fetch(avatar, { method: 'DELETE', headers: { Origin: baseURL, Cookie: cookie } }))
+				.status,
+			204,
+		)
+		assert.equal(await used(), '0')
+		assert.equal((await fetch(avatar, { headers: { Cookie: cookie } })).status, 404)
+	} finally {
+		await f.close()
+	}
+})

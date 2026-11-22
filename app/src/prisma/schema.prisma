@@ -14,6 +14,7 @@ model User {
   emailVerified   Boolean   @default(false) @map("emailverified")
   image           String?   @db.VarChar
   userRole        String    @default("user") @map("user_role") @db.VarChar
+  deletionPending Boolean   @default(false) @map("deletion_pending")
   banned          Boolean?  @default(false)
   banReason       String?   @map("banreason") @db.VarChar
   banExpires      DateTime? @map("banexpires") @db.Timestamp
@@ -26,7 +27,7 @@ model User {
   folders     Folder[]
   files       File[]
   sharedLinks SharedLink[]
-  auditLogs   AuditLog[]
+  avatar      Avatar?
   uploadReservations UploadReservation[]
 
   @@map("users")
@@ -193,14 +194,28 @@ model UploadReservation {
 
 model AuditLog {
   id        Int      @id(map: "pk_audit_logs") @default(autoincrement())
-  userId    Int      @map("userid")
+  userId    Int?     @map("userid")
   action    String   @db.VarChar
   ipAddress String   @map("ipaddress") @db.VarChar
   details   String?  @db.VarChar
+  requestId String?  @map("request_id") @db.VarChar
+  actorName String?  @map("actor_name") @db.VarChar
+  actorEmail String? @map("actor_email") @db.VarChar
+  bytes     BigInt?
   createdAt DateTime @default(now()) @map("createdat") @db.Timestamp
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "userid")
-
+  @@index([createdAt, id])
+  @@index([userId, createdAt, id])
   @@map("audit_logs")
+  @@schema("silverbox_api")
+}
+
+model Avatar {
+  userId    Int      @id @map("user_id")
+  content   Bytes
+  sizeBytes BigInt   @map("size_bytes")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("avatars")
   @@schema("silverbox_api")
 }

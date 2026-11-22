@@ -1,4 +1,5 @@
 import { betterAuth } from 'better-auth'
+import { APIError, createAuthMiddleware } from 'better-auth/api'
 import { prismaAdapter } from 'better-auth/adapters/prisma'
 import { admin } from 'better-auth/plugins'
 import { env } from '../config/env.js'
@@ -16,14 +17,15 @@ export const auth = betterAuth({
 	},
 	emailAndPassword: {
 		enabled: true,
-		resetPasswordTokenExpiresIn: 3600,
+		resetPasswordTokenExpiresIn: 15 * 60,
+		revokeSessionsOnPasswordReset: true,
 		...(smtpConfigured
 			? {
 					sendResetPassword: async ({ user, url }) => {
 						void sendEmail({
 							to: user.email,
 							subject: 'Reset your Silverbox password',
-							text: `Hello ${user.name},\n\nUse this link to reset your Silverbox password. It expires in one hour.\n\n${url}\n`,
+							text: `Hello ${user.name},\n\nUse this link to reset your Silverbox password. It expires in 15 minutes.\n\n${url}\n`,
 						}).catch(() => {
 							console.error('[MAIL] Password reset email delivery failed')
 						})
@@ -40,13 +42,25 @@ export const auth = betterAuth({
 		ipAddress: { ipAddressHeaders: ['x-real-ip'] },
 	},
 	plugins: [admin({ schema: { user: { fields: { role: 'userRole' } } } })],
-	//The admin plugin is only used for roles. Switch off its ban and impersonation endpoints.
+	// The product handles account mutations that need storage and administrator invariants.
 	disabledPaths: [
 		'/admin/ban-user',
+		'/admin/set-role',
+		'/admin/remove-user',
+		'/admin/create-user',
+		'/admin/update-user',
 		'/admin/unban-user',
 		'/admin/impersonate-user',
 		'/admin/stop-impersonating',
 	],
+	hooks: {
+		before: createAuthMiddleware(async (ctx) => {
+			if (['/sign-up/email', '/update-user'].includes(ctx.path) && ctx.body?.image !== undefined)
+				throw new APIError('BAD_REQUEST', {
+					message: 'Use /users/me/avatar to change your profile image',
+				})
+		}),
+	},
 	socialProviders:
 		env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
 			? { google: { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET } }

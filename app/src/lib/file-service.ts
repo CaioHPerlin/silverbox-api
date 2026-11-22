@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import type { Readable } from 'node:stream'
+import type { Request } from 'express'
 import type { Prisma, File, FileVersion } from '@prisma/client'
 import { prisma } from './prisma.js'
 import { storage } from './storage.js'
 import { env } from '../config/env.js'
 import { HttpError } from './errors.js'
+import { audit } from './audit.js'
 export { HttpError } from './errors.js'
 
 type Transaction = Prisma.TransactionClient
@@ -34,24 +36,15 @@ export function versionJson(version: FileVersion) {
 	}
 }
 
-export async function audit(
-	tx: Transaction,
-	userId: number,
-	action: string,
-	ipAddress: string,
-	details?: string,
-): Promise<void> {
-	await tx.auditLog.create({ data: { userId, action, ipAddress, details } })
-}
-
 export async function usage(userId: number, tx: Transaction | typeof prisma = prisma) {
-	const [user, versions, reservations] = await Promise.all([
+	const [user, versions, reservations, avatar] = await Promise.all([
 		tx.user.findUnique({ where: { id: userId }, select: { quotaLimitBytes: true } }),
 		tx.fileVersion.aggregate({ where: { file: { userId } }, _sum: { sizeBytes: true } }),
 		tx.uploadReservation.aggregate({ where: { userId }, _sum: { sizeBytes: true } }),
+		tx.avatar.findUnique({ where: { userId }, select: { sizeBytes: true } }),
 	])
 	if (!user) throw new HttpError(401, 'User not found')
-	const used = versions._sum.sizeBytes ?? 0n
+	const used = (versions._sum.sizeBytes ?? 0n) + (avatar?.sizeBytes ?? 0n)
 	const reserved = reservations._sum.sizeBytes ?? 0n
 	return {
 		used,
@@ -68,23 +61,40 @@ export async function lockUser(tx: Transaction, userId: number): Promise<void> {
 	if (rows.length === 0) throw new HttpError(401, 'User not found')
 }
 
+export async function lockStorageBudget(tx: Transaction): Promise<void> {
+	await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(714923, 1)`
+}
+
+export async function requireWritableAccount(tx: Transaction, userId: number): Promise<void> {
+	const user = await tx.user.findUnique({
+		where: { id: userId },
+		select: { banned: true, deletionPending: true },
+	})
+	if (!user || user.banned || user.deletionPending) throw new HttpError(403, 'Account unavailable')
+}
+
 async function reserve(userId: number, sizeBytes: bigint) {
 	const id = randomUUID()
 	const storageKey = `objects/${userId}/${randomUUID()}`
 	await prisma.$transaction(async (tx) => {
 		// Every writer takes the global lock before the user lock.
-		await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(714923, 1)`
+		await lockStorageBudget(tx)
 		await lockUser(tx, userId)
-		const [versions, reservations, count, userCount] = await Promise.all([
+		await requireWritableAccount(tx, userId)
+		const [versions, reservations, count, userCount, avatars] = await Promise.all([
 			tx.fileVersion.aggregate({ _sum: { sizeBytes: true } }),
 			tx.uploadReservation.aggregate({ _sum: { sizeBytes: true } }),
 			tx.uploadReservation.count(),
 			tx.uploadReservation.count({ where: { userId } }),
+			tx.avatar.aggregate({ _sum: { sizeBytes: true } }),
 		])
 		if (count >= env.STORAGE_MAX_TRANSFERS || userCount >= env.STORAGE_MAX_USER_TRANSFERS)
 			throw new HttpError(429, 'Too many simultaneous transfers')
 		const reserved = reservations._sum.sizeBytes ?? 0n
-		if ((versions._sum.sizeBytes ?? 0n) + reserved + sizeBytes > env.STORAGE_MAX_BYTES)
+		if (
+			(versions._sum.sizeBytes ?? 0n) + (avatars._sum.sizeBytes ?? 0n) + reserved + sizeBytes >
+			env.STORAGE_MAX_BYTES
+		)
 			throw new HttpError(507, 'Global storage limit exceeded')
 		let capacity
 		try {
@@ -134,8 +144,9 @@ export async function withStoredBytes<T>(
 			await storage.commit(reservation.stagedKey, reservation.storageKey)
 		}
 		return await prisma.$transaction(async (tx) => {
-			await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(714923, 1)`
+			await lockStorageBudget(tx)
 			await lockUser(tx, userId)
+			await requireWritableAccount(tx, userId)
 			const value = await commit(tx, reservation.storageKey, checksum)
 			await tx.uploadReservation.delete({ where: { id: reservation.id } })
 			return value
@@ -172,6 +183,42 @@ export async function checkFolder(userId: number, folderId: number | null): Prom
 	if (folderId === null) return
 	const folder = await prisma.folder.findFirst({ where: { id: folderId, userId } })
 	if (!folder) throw new HttpError(404, 'Folder not found')
+}
+
+export async function trashFile(req: Request, actorId: number, file: File, action: string) {
+	await prisma.$transaction(async (tx) => {
+		await lockUser(tx, file.userId)
+		const now = new Date()
+		const result = await tx.file.updateMany({
+			where: { id: file.id, status: 'ready', isDeleted: false },
+			data: { isDeleted: true, deletedAt: now },
+		})
+		if (!result.count) throw new HttpError(409, 'File is no longer available')
+		await tx.sharedLink.updateMany({
+			where: { fileId: file.id, revokedAt: null },
+			data: { revokedAt: now },
+		})
+		await audit(req, actorId, action, `file:${file.id};owner:${file.userId}`, tx)
+	})
+}
+
+export async function expungeFile(req: Request, actorId: number, file: File, action: string) {
+	await prisma.$transaction(async (tx) => {
+		await lockUser(tx, file.userId)
+		const result = await tx.file.updateMany({
+			where: { id: file.id, status: 'ready', isDeleted: true },
+			data: { status: 'deleting' },
+		})
+		if (!result.count) throw new HttpError(409, 'Move the file to trash first')
+		await audit(req, actorId, action, `file:${file.id};owner:${file.userId}`, tx)
+	})
+	try {
+		await purgeFile(file.id)
+		return true
+	} catch (error) {
+		console.error('[STORAGE] Permanent deletion queued for retry:', error)
+		return false
+	}
 }
 
 export async function purgeFile(fileId: number): Promise<void> {

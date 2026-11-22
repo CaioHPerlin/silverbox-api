@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto'
+import { audit } from '../lib/audit.js'
 import { pipeline } from 'node:stream/promises'
-import { SharePermission, type File, type SharedLink } from '@prisma/client'
+import { SharePermission, type File, type Prisma, type SharedLink } from '@prisma/client'
 import { fromNodeHeaders } from 'better-auth/node'
 import { Router, type NextFunction, type Request, type Response } from 'express'
 import { z } from 'zod'
@@ -8,13 +9,14 @@ import { auth } from '../lib/auth.js'
 import { prisma } from '../lib/prisma.js'
 import { storage } from '../lib/storage.js'
 import {
-	audit,
+	expungeFile,
 	checkFolder,
 	fileJson,
 	HttpError,
 	lockUser,
+	requireWritableAccount,
 	ownedFile,
-	purgeFile,
+	trashFile,
 	usage,
 	versionJson,
 	withStoredBytes,
@@ -71,10 +73,6 @@ async function userId(req: Request): Promise<number> {
 	return id(session.user.id)
 }
 
-function requestIp(req: Request): string {
-	return req.ip ?? 'unknown'
-}
-
 function uploadHeaders(req: Request) {
 	if (req.headers['content-type'] !== 'application/octet-stream')
 		throw new HttpError(415, 'Content-Type must be application/octet-stream')
@@ -100,7 +98,7 @@ function uploadHeaders(req: Request) {
 	return { size, name, mimeType }
 }
 
-async function sendFile(
+export async function sendFile(
 	res: Response,
 	storageKey: string,
 	name: string,
@@ -145,8 +143,14 @@ foldersRouter.post(
 		const owner = await userId(req)
 		const body = folderSchema.parse(req.body)
 		await checkFolder(owner, body.parentFolderId)
-		const folder = await prisma.folder.create({
-			data: { userId: owner, name: body.name, parentFolderId: body.parentFolderId },
+		const folder = await prisma.$transaction(async (tx) => {
+			await lockUser(tx, owner)
+			await requireWritableAccount(tx, owner)
+			const created = await tx.folder.create({
+				data: { userId: owner, name: body.name, parentFolderId: body.parentFolderId },
+			})
+			await audit(req, owner, 'folder_create', `folder:${created.id}`, tx)
+			return created
 		})
 		res.status(201).json({ folder })
 	}),
@@ -172,7 +176,13 @@ foldersRouter.patch(
 				cursor = parent?.parentFolderId ?? null
 			}
 		}
-		const updated = await prisma.folder.update({ where: { id: folderId }, data: body })
+		const updated = await prisma.$transaction(async (tx) => {
+			await lockUser(tx, owner)
+			await requireWritableAccount(tx, owner)
+			const current = await tx.folder.update({ where: { id: folderId }, data: body })
+			await audit(req, owner, 'folder_update', `folder:${folderId}`, tx)
+			return current
+		})
 		res.json({ folder: updated })
 	}),
 )
@@ -189,7 +199,12 @@ foldersRouter.delete(
 			prisma.file.count({ where: { folderId } }),
 		])
 		if (children || files) throw new HttpError(409, 'Folder is not empty')
-		await prisma.folder.delete({ where: { id: folderId } })
+		await prisma.$transaction(async (tx) => {
+			await lockUser(tx, owner)
+			await requireWritableAccount(tx, owner)
+			await tx.folder.delete({ where: { id: folderId } })
+			await audit(req, owner, 'folder_delete', `folder:${folderId}`, tx)
+		})
 		res.status(204).end()
 	}),
 )
@@ -247,7 +262,7 @@ filesRouter.post(
 					},
 				},
 			})
-			await audit(tx, owner, 'upload', requestIp(req), `file:${created.id}`)
+			await audit(req, owner, 'upload', `file:${created.id}`, tx, size)
 			return created
 		})
 		res.status(201).json({ file: fileJson(file) })
@@ -301,15 +316,10 @@ filesRouter.get(
 	route(async (req, res) => {
 		const owner = await userId(req)
 		const file = await ownedFile(owner, id(req.params.id))
-		await prisma.auditLog.create({
-			data: {
-				userId: owner,
-				action: 'download',
-				ipAddress: requestIp(req),
-				details: `file:${file.id}`,
-			},
-		})
+
 		await sendFile(res, file.storageKey, file.originalName, file.mimeType, file.sizeBytes)
+		if (res.writableFinished)
+			await audit(req, owner, 'download', `file:${file.id}`, prisma, file.sizeBytes)
 	}),
 )
 
@@ -321,7 +331,17 @@ filesRouter.patch(
 		const body = fileChangeSchema.parse(req.body)
 		if (Object.keys(body).length === 0) throw new HttpError(400, 'No changes provided')
 		if (body.folderId !== undefined) await checkFolder(owner, body.folderId)
-		const updated = await prisma.file.update({ where: { id: file.id }, data: body })
+		const updated = await prisma.$transaction(async (tx) => {
+			await lockUser(tx, owner)
+			await requireWritableAccount(tx, owner)
+			const changed = await tx.file.updateMany({
+				where: { id: file.id, status: 'ready', isDeleted: false },
+				data: body,
+			})
+			if (!changed.count) throw new HttpError(409, 'File is no longer available')
+			await audit(req, owner, 'file_update', `file:${file.id}`, tx)
+			return tx.file.findUniqueOrThrow({ where: { id: file.id } })
+		})
 		res.json({ file: fileJson(updated) })
 	}),
 )
@@ -356,11 +376,12 @@ filesRouter.post(
 				data: { storageKey: key, sizeBytes: size, mimeType, checksum },
 			})
 			await audit(
-				tx,
+				req,
 				owner,
 				'version_upload',
-				requestIp(req),
 				`file:${file.id};version:${created.id}`,
+				tx,
+				size,
 			)
 			return created
 		})
@@ -389,14 +410,7 @@ filesRouter.get(
 			where: { id: id(req.params.versionId), fileId: file.id },
 		})
 		if (!version) throw new HttpError(404, 'Version not found')
-		await prisma.auditLog.create({
-			data: {
-				userId: owner,
-				action: 'version_download',
-				ipAddress: requestIp(req),
-				details: `file:${file.id};version:${version.id}`,
-			},
-		})
+
 		await sendFile(
 			res,
 			version.storageKey,
@@ -404,6 +418,15 @@ filesRouter.get(
 			version.mimeType,
 			version.sizeBytes,
 		)
+		if (res.writableFinished)
+			await audit(
+				req,
+				owner,
+				'version_download',
+				`file:${file.id};version:${version.id}`,
+				prisma,
+				version.sizeBytes,
+			)
 	}),
 )
 
@@ -448,13 +471,7 @@ filesRouter.post(
 						mimeType: source.mimeType,
 					},
 				})
-				await audit(
-					tx,
-					owner,
-					'version_restore',
-					requestIp(req),
-					`file:${file.id};version:${created.id}`,
-				)
+				await audit(req, owner, 'version_restore', `file:${file.id};version:${created.id}`, tx)
 				return created
 			},
 		)
@@ -467,17 +484,7 @@ filesRouter.delete(
 	route(async (req, res) => {
 		const owner = await userId(req)
 		const file = await ownedFile(owner, id(req.params.id))
-		await prisma.$transaction(async (tx) => {
-			await tx.file.update({
-				where: { id: file.id },
-				data: { isDeleted: true, deletedAt: new Date() },
-			})
-			await tx.sharedLink.updateMany({
-				where: { fileId: file.id, revokedAt: null },
-				data: { revokedAt: new Date() },
-			})
-			await audit(tx, owner, 'trash', requestIp(req), `file:${file.id}`)
-		})
+		await trashFile(req, owner, file, 'trash')
 		res.status(204).end()
 	}),
 )
@@ -489,11 +496,13 @@ filesRouter.post(
 		const file = await ownedFile(owner, id(req.params.id), true)
 		if (!file.isDeleted) throw new HttpError(409, 'File is not in trash')
 		const restored = await prisma.$transaction(async (tx) => {
+			await lockUser(tx, owner)
+			await requireWritableAccount(tx, owner)
 			const value = await tx.file.update({
-				where: { id: file.id },
+				where: { id: file.id, status: 'ready', isDeleted: true },
 				data: { isDeleted: false, deletedAt: null },
 			})
-			await audit(tx, owner, 'trash_restore', requestIp(req), `file:${file.id}`)
+			await audit(req, owner, 'trash_restore', `file:${file.id}`, tx)
 			return value
 		})
 		res.json({ file: fileJson(restored) })
@@ -505,19 +514,8 @@ filesRouter.delete(
 	route(async (req, res) => {
 		const owner = await userId(req)
 		const file = await ownedFile(owner, id(req.params.id), true)
-		if (!file.isDeleted) throw new HttpError(409, 'Move the file to trash first')
-		await prisma.$transaction(async (tx) => {
-			await lockUser(tx, owner)
-			await tx.file.update({ where: { id: file.id }, data: { status: 'deleting' } })
-			await audit(tx, owner, 'permanent_delete', requestIp(req), `file:${file.id}`)
-		})
-		try {
-			await purgeFile(file.id)
-			res.status(204).end()
-		} catch (error) {
-			console.error('[STORAGE] Permanent deletion queued for retry:', error)
-			res.status(202).json({ status: 'deleting' })
-		}
+		if (await expungeFile(req, owner, file, 'permanent_delete')) res.status(204).end()
+		else res.status(202).json({ status: 'deleting' })
 	}),
 )
 
@@ -559,6 +557,7 @@ async function sendSharedFile(
 	res: Response,
 	share: SharedLink & { file: File },
 	disposition: 'attachment' | 'inline',
+	actorId: number | null = null,
 ): Promise<void> {
 	if (shareStatus(share, new Date()) !== 'active')
 		throw new HttpError(410, 'Share is no longer available')
@@ -572,13 +571,6 @@ async function sendSharedFile(
 		res.setHeader('Referrer-Policy', 'no-referrer')
 	}
 
-	await audit(
-		prisma,
-		share.userId,
-		disposition === 'attachment' ? 'share_download' : 'share_view',
-		requestIp(req),
-		`file:${share.fileId};share:${share.id}`,
-	)
 	await sendFile(
 		res,
 		share.file.storageKey,
@@ -587,6 +579,16 @@ async function sendSharedFile(
 		share.file.sizeBytes,
 		disposition,
 	)
+	if (res.writableFinished) {
+		await audit(
+			req,
+			actorId,
+			disposition === 'attachment' ? 'share_download' : 'share_view',
+			`file:${share.fileId};share:${share.id};owner:${share.userId}`,
+			prisma,
+			share.file.sizeBytes,
+		)
+	}
 }
 
 filesRouter.post(
@@ -606,6 +608,7 @@ filesRouter.post(
 		const link = await prisma.$transaction(async (tx) => {
 			// Match the user-before-file lock order of version writes.
 			await tx.$queryRaw`SELECT id FROM silverbox_api.users WHERE id = ${owner} FOR KEY SHARE`
+			await requireWritableAccount(tx, owner)
 			// Serialize with trashing, which locks the file before revoking its links.
 			const [file] = await tx.$queryRaw<Array<{ mimeType: string }>>`
 				SELECT mimetype AS "mimeType" FROM silverbox_api.files
@@ -621,13 +624,7 @@ filesRouter.post(
 			const created = await tx.sharedLink.create({
 				data: { fileId, userId: owner, token: hashed, expiresAt, permission: body.permission },
 			})
-			await audit(
-				tx,
-				owner,
-				'share_create',
-				requestIp(req),
-				`file:${fileId};share:${created.id}`,
-			)
+			await audit(req, owner, 'share_create', `file:${fileId};share:${created.id}`, tx)
 			return created
 		})
 		res.setHeader('Cache-Control', 'no-store')
@@ -660,19 +657,15 @@ filesRouter.delete(
 		const owner = await userId(req)
 		const file = await ownedFile(owner, id(req.params.id), true)
 		const shareId = id(req.params.shareId)
-		const changed = await prisma.sharedLink.updateMany({
-			where: { id: shareId, fileId: file.id, userId: owner },
-			data: { revokedAt: new Date() },
+		await prisma.$transaction(async (tx) => {
+			const changed = await tx.sharedLink.updateMany({
+				where: { id: shareId, fileId: file.id, userId: owner },
+				data: { revokedAt: new Date() },
+			})
+			if (!changed.count) throw new HttpError(404, 'Share not found')
+			await audit(req, owner, 'share_revoke', `file:${file.id};share:${shareId}`, tx)
 		})
-		if (!changed.count) throw new HttpError(404, 'Share not found')
-		await prisma.auditLog.create({
-			data: {
-				userId: owner,
-				action: 'share_revoke',
-				ipAddress: requestIp(req),
-				details: `file:${file.id};share:${shareId}`,
-			},
-		})
+
 		res.status(204).end()
 	}),
 )
@@ -686,8 +679,26 @@ sharesRouter.get(
 	'/',
 	route(async (req, res) => {
 		const owner = await userId(req)
-		const links = await prisma.sharedLink.findMany({
-			where: { userId: owner },
+		const number = (max: number) =>
+			z.string().regex(/^\d+$/).transform(Number).pipe(z.number().int().min(1).max(max))
+		const query = z
+			.object({
+				page: number(10000).optional(),
+				limit: number(100).optional(),
+				q: z.string().trim().max(155).optional(),
+			})
+			.parse(req.query)
+		const page = query.page ?? 1
+		const limit = query.limit ?? 50
+		const paginated =
+			query.page !== undefined || query.limit !== undefined || query.q !== undefined
+		const where: Prisma.SharedLinkWhereInput = {
+			userId: owner,
+			...(query.q ? { file: { originalName: { contains: query.q, mode: 'insensitive' } } } : {}),
+		}
+		const selection = prisma.sharedLink.findMany({
+			where,
+			...(paginated ? { skip: (page - 1) * limit, take: limit } : {}),
 			orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
 			select: {
 				...shareMetadata,
@@ -704,6 +715,11 @@ sharesRouter.get(
 				},
 			},
 		})
+		const [links, total] = paginated
+			? await prisma.$transaction([selection, prisma.sharedLink.count({ where })], {
+					isolationLevel: 'RepeatableRead',
+				})
+			: [await selection, undefined]
 		const now = new Date()
 		const shares = links.map((link) => {
 			const { user, file, ...metadata } = link
@@ -719,7 +735,7 @@ sharesRouter.get(
 				status: shareStatus(link, now),
 			}
 		})
-		res.json({ shares })
+		res.json(paginated ? { shares, page, limit, total } : { shares })
 	}),
 )
 
@@ -733,7 +749,7 @@ sharesRouter.get(
 			include: { file: true },
 		})
 		if (!share) throw new HttpError(404, 'Share not found')
-		await sendSharedFile(req, res, share, 'attachment')
+		await sendSharedFile(req, res, share, 'attachment', owner)
 	}),
 )
 

@@ -280,8 +280,9 @@ test('folders, versions, sharing, trash, quota and binary round-trip work togeth
 		await auditDatabase.connect()
 		try {
 			const actions = await auditDatabase.query(
-				'SELECT DISTINCT action FROM silverbox_api.audit_logs WHERE userid = $1',
-				[Number(alice.user.id)],
+				`SELECT DISTINCT action FROM silverbox_api.audit_logs
+				WHERE userid = $1 OR (userid IS NULL AND details LIKE $2)`,
+				[Number(alice.user.id), `%;owner:${alice.user.id}`],
 			)
 			const observed = new Set(actions.rows.map((row: { action: string }) => row.action))
 			for (const action of [

@@ -23,11 +23,13 @@ export async function sendEmail({
 	to,
 	subject,
 	text,
+	html,
 }: {
 	to: string
 	subject: string
 	text: string
+	html?: string
 }): Promise<void> {
 	if (!transporter || !env.MAIL_FROM) throw new Error('SMTP email delivery is disabled')
-	await transporter.sendMail({ from: env.MAIL_FROM, to, subject, text })
+	await transporter.sendMail({ from: env.MAIL_FROM, to, subject, text, html })
 }

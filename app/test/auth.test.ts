@@ -35,14 +35,18 @@ async function waitForCondition(predicate: () => boolean, message: string): Prom
 	throw new Error(message)
 }
 
-function getResetLink(message: string): URL {
+function decodeEmail(message: string): string {
 	// Nodemailer wraps long text lines and encodes '=' as '=3D' in quoted-printable MIME.
-	const messageText = message
+	const bytes = message
 		.replace(/=\r?\n/g, '')
 		.replace(/=([0-9a-f]{2})/gi, (_match, hex: string) =>
 			String.fromCharCode(Number.parseInt(hex, 16)),
 		)
-	const resetLink = messageText.match(/https?:\/\/[^\s<>]+/)?.[0]
+	return Buffer.from(bytes, 'latin1').toString('utf8')
+}
+
+function getResetLink(message: string): URL {
+	const resetLink = decodeEmail(message).match(/https?:\/\/[^\s<>]+/)?.[0]
 	assert.ok(resetLink, 'Reset URL was not present in the captured email')
 	return new URL(resetLink)
 }
@@ -208,7 +212,7 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async (t)
 			method: 'POST',
 			headers: frontHeaders,
 			body: JSON.stringify({
-				name: 'Front User',
+				name: 'Front <User> & Equipe',
 				email: nativeEmail,
 				password: 'correct-horse-battery-staple',
 			}),
@@ -241,9 +245,19 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async (t)
 		const requestedBody = await requested.json()
 		assert.equal(requestedBody.status, true)
 		await waitForCondition(() => messages.length === 1, 'Reset email was not captured')
-		assert.match(messages[0]!, /Subject: Reset your Silverbox password/)
-		assert.ok(messages[0]!.includes(`To: ${nativeEmail}`))
-		const resetUrl = getResetLink(messages[0]!)
+		const emailMessage = messages[0]!
+		assert.match(emailMessage, /Subject: Redefina sua senha do Silverbox/)
+		assert.ok(emailMessage.includes(`To: ${nativeEmail}`))
+		assert.match(emailMessage, /Content-Type: multipart\/alternative/)
+		const [plainText, html] = decodeEmail(emailMessage).split(/Content-Type: text\/html;[^\r\n]*/)
+		assert.ok(plainText && html, 'The reset email must have two MIME parts')
+		assert.match(plainText, /Content-Type: text\/plain/)
+		assert.ok(plainText.includes('Olá, Front <User> & Equipe!'))
+		assert.ok(html.includes('Olá, Front &lt;User&gt; &amp; Equipe!'))
+		assert.ok(plainText.includes('O link expira em 15 minutos'))
+		assert.ok(html.includes('O link expira em 15 minutos'))
+		const resetUrl = getResetLink(emailMessage)
+		assert.ok(html.includes(`href="${resetUrl.toString().replaceAll('&', '&amp;')}"`))
 		assert.equal(resetUrl.searchParams.get('callbackURL'), redirectTo)
 		const token = resetUrl.pathname.split('/').at(-1)
 		assert.ok(token)

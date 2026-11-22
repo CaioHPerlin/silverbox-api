@@ -1,4 +1,5 @@
 import { betterAuth } from 'better-auth'
+import { APIError, createAuthMiddleware } from 'better-auth/api'
 import { prismaAdapter } from 'better-auth/adapters/prisma'
 import { admin } from 'better-auth/plugins'
 import { env } from '../config/env.js'
@@ -52,6 +53,14 @@ export const auth = betterAuth({
 		'/admin/impersonate-user',
 		'/admin/stop-impersonating',
 	],
+	hooks: {
+		before: createAuthMiddleware(async (ctx) => {
+			if (['/sign-up/email', '/update-user'].includes(ctx.path) && ctx.body?.image !== undefined)
+				throw new APIError('BAD_REQUEST', {
+					message: 'Use /users/me/avatar to change your profile image',
+				})
+		}),
+	},
 	socialProviders:
 		env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
 			? { google: { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET } }

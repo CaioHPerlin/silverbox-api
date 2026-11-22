@@ -458,3 +458,69 @@ test('admin contracts join accounts, storage operations, audit and metrics witho
 		await f.close()
 	}
 })
+
+test('avatar is private, decoded, billed once on replacement and released on removal', async () => {
+	const f = await fixture()
+	try {
+		await f.start()
+		const cookie = await signup()
+		const avatar = baseURL + '/users/me/avatar'
+		const { default: sharp } = await import('sharp')
+		const image = await sharp({
+			create: { width: 5, height: 5, channels: 3, background: '#336699' },
+		})
+			.png()
+			.toBuffer()
+		const save = (bytes: Buffer, mime = 'image/png') =>
+			fetch(avatar, {
+				method: 'POST',
+				headers: { Origin: baseURL, Cookie: cookie, 'Content-Type': mime },
+				body: bytes,
+			})
+		const used = async () => {
+			const response = await fetch(baseURL + '/storage/usage', { headers: { Cookie: cookie } })
+			return (await response.json()).usedBytes
+		}
+		assert.equal(await used(), '0')
+		assert.equal((await save(Buffer.from('not a PNG'))).status, 415)
+		assert.equal((await save(image, 'image/jpeg')).status, 415)
+		assert.equal((await save(Buffer.alloc(2 * 1024 * 1024 + 1))).status, 413)
+		const result = await save(image)
+		assert.equal(result.status, 200, await result.clone().text())
+		const data = await result.json()
+		assert.match(data.image, /^\/users\/me\/avatar\?v=[0-9a-f]{16}$/)
+		assert.equal(await used(), data.sizeBytes)
+		assert.equal((await fetch(avatar)).status, 401)
+		const other = await signup()
+		assert.equal((await fetch(avatar, { headers: { Cookie: other } })).status, 404)
+		const loaded = await fetch(baseURL + data.image, { headers: { Cookie: cookie } })
+		assert.equal(loaded.status, 200)
+		assert.equal(loaded.headers.get('content-type'), 'image/webp')
+		assert.equal((await loaded.arrayBuffer()).byteLength, Number(data.sizeBytes))
+		const session = await fetch(baseURL + '/users/me', { headers: { Cookie: cookie } })
+		assert.equal((await session.json()).user.image, data.image)
+		const updateUser = await fetch(baseURL + '/api/auth/update-user', {
+			method: 'POST',
+			headers: { ...authHeaders, Cookie: cookie },
+			body: JSON.stringify({ image: 'https://example.com/avatar.png' }),
+		})
+		assert.equal(updateUser.status, 400)
+		const renamed = await fetch(baseURL + '/api/auth/update-user', {
+			method: 'POST',
+			headers: { ...authHeaders, Cookie: cookie },
+			body: JSON.stringify({ name: 'Novo nome' }),
+		})
+		assert.equal(renamed.status, 200)
+		assert.equal((await save(image)).status, 200)
+		assert.equal(await used(), data.sizeBytes)
+		assert.equal(
+			(await fetch(avatar, { method: 'DELETE', headers: { Origin: baseURL, Cookie: cookie } }))
+				.status,
+			204,
+		)
+		assert.equal(await used(), '0')
+		assert.equal((await fetch(avatar, { headers: { Cookie: cookie } })).status, 404)
+	} finally {
+		await f.close()
+	}
+})

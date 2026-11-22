@@ -21,6 +21,7 @@ import {
 import { loggerMiddleware } from './middleware/logger.js'
 import { authRouter, usersRouter } from './routes/auth.js'
 import { adminRouter, nativeAdminRouter } from './routes/admin.js'
+import { avatarRouter } from './routes/avatar.js'
 import {
   filesRouter,
   foldersRouter,
@@ -56,6 +57,7 @@ export function createApp(): Application {
   app.use(express.json())
 
   app.use('/auth', authRouter)
+  app.use('/users/me/avatar', avatarRouter)
   app.use('/users', usersRouter)
   app.use('/admin', adminRouter)
   app.use('/folders', foldersRouter)
@@ -106,6 +108,17 @@ export function createApp(): Application {
       ) {
         res.status(400).json({ error: 'Invalid JSON' })
         return
+      }
+
+      if (error instanceof Error && 'type' in error) {
+        if (error.type === 'entity.too.large') {
+          res.status(413).json({ error: 'Request body is too large' })
+          return
+        }
+        if (error.type === 'encoding.unsupported') {
+          res.status(415).json({ error: 'Unsupported content encoding' })
+          return
+        }
       }
 
       if (error instanceof ZodError) {

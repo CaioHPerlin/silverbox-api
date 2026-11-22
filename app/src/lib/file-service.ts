@@ -179,9 +179,16 @@ export async function ownedFile(userId: number, id: number, includeDeleted = fal
 	return file
 }
 
-export async function checkFolder(userId: number, folderId: number | null): Promise<void> {
+export async function checkFolder(
+	userId: number,
+	folderId: number | null,
+	tx: Transaction = prisma,
+): Promise<void> {
 	if (folderId === null) return
-	const folder = await prisma.folder.findFirst({ where: { id: folderId, userId } })
+	const folder = await tx.folder.findFirst({
+		where: { id: folderId, userId },
+		select: { id: true },
+	})
 	if (!folder) throw new HttpError(404, 'Folder not found')
 }
 

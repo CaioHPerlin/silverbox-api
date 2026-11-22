@@ -142,10 +142,10 @@ foldersRouter.post(
 	route(async (req, res) => {
 		const owner = await userId(req)
 		const body = folderSchema.parse(req.body)
-		await checkFolder(owner, body.parentFolderId)
 		const folder = await prisma.$transaction(async (tx) => {
 			await lockUser(tx, owner)
 			await requireWritableAccount(tx, owner)
+			await checkFolder(owner, body.parentFolderId, tx)
 			const created = await tx.folder.create({
 				data: { userId: owner, name: body.name, parentFolderId: body.parentFolderId },
 			})
@@ -163,26 +163,33 @@ foldersRouter.patch(
 		const folderId = id(req.params.id)
 		const body = folderChangeSchema.parse(req.body)
 		if (Object.keys(body).length === 0) throw new HttpError(400, 'No changes provided')
-		const folder = await prisma.folder.findFirst({ where: { id: folderId, userId: owner } })
-		if (!folder) throw new HttpError(404, 'Folder not found')
-		if (body.parentFolderId !== undefined) {
-			await checkFolder(owner, body.parentFolderId)
-			let cursor = body.parentFolderId
-			while (cursor !== null) {
-				if (cursor === folderId) throw new HttpError(409, 'Folder move would create a cycle')
-				const parent: { parentFolderId: number | null } | null = await prisma.folder.findUnique(
-					{ where: { id: cursor }, select: { parentFolderId: true } },
-				)
-				cursor = parent?.parentFolderId ?? null
-			}
-		}
-		const updated = await prisma.$transaction(async (tx) => {
-			await lockUser(tx, owner)
-			await requireWritableAccount(tx, owner)
-			const current = await tx.folder.update({ where: { id: folderId }, data: body })
-			await audit(req, owner, 'folder_update', `folder:${folderId}`, tx)
-			return current
-		})
+		const updated = await prisma.$transaction(
+			async (tx) => {
+				await lockUser(tx, owner)
+				await requireWritableAccount(tx, owner)
+				await checkFolder(owner, folderId, tx)
+				if (body.parentFolderId !== undefined) {
+					const visited = new Set([folderId])
+					let cursor = body.parentFolderId
+					while (cursor !== null) {
+						if (visited.has(cursor))
+							throw new HttpError(409, 'Folder move would create a cycle')
+						visited.add(cursor)
+						const parent: { parentFolderId: number | null } | null =
+							await tx.folder.findFirst({
+								where: { id: cursor, userId: owner },
+								select: { parentFolderId: true },
+							})
+						if (!parent) throw new HttpError(404, 'Folder not found')
+						cursor = parent.parentFolderId
+					}
+				}
+				const current = await tx.folder.update({ where: { id: folderId }, data: body })
+				await audit(req, owner, 'folder_update', `folder:${folderId}`, tx)
+				return current
+			},
+			{ isolationLevel: 'ReadCommitted' },
+		)
 		res.json({ folder: updated })
 	}),
 )
@@ -192,16 +199,15 @@ foldersRouter.delete(
 	route(async (req, res) => {
 		const owner = await userId(req)
 		const folderId = id(req.params.id)
-		const folder = await prisma.folder.findFirst({ where: { id: folderId, userId: owner } })
-		if (!folder) throw new HttpError(404, 'Folder not found')
-		const [children, files] = await Promise.all([
-			prisma.folder.count({ where: { parentFolderId: folderId } }),
-			prisma.file.count({ where: { folderId } }),
-		])
-		if (children || files) throw new HttpError(409, 'Folder is not empty')
 		await prisma.$transaction(async (tx) => {
 			await lockUser(tx, owner)
 			await requireWritableAccount(tx, owner)
+			await checkFolder(owner, folderId, tx)
+			const [children, files] = await Promise.all([
+				tx.folder.count({ where: { parentFolderId: folderId } }),
+				tx.file.count({ where: { folderId } }),
+			])
+			if (children || files) throw new HttpError(409, 'Folder is not empty')
 			await tx.folder.delete({ where: { id: folderId } })
 			await audit(req, owner, 'folder_delete', `folder:${folderId}`, tx)
 		})
@@ -242,6 +248,7 @@ filesRouter.post(
 			req.headers['x-folder-id'] === undefined ? null : id(req.headers['x-folder-id'])
 		await checkFolder(owner, folderId)
 		const file = await withStoredBytes(req, owner, size, async (tx, key, checksum) => {
+			await checkFolder(owner, folderId, tx)
 			const created = await tx.file.create({
 				data: {
 					userId: owner,
@@ -330,10 +337,10 @@ filesRouter.patch(
 		const file = await ownedFile(owner, id(req.params.id))
 		const body = fileChangeSchema.parse(req.body)
 		if (Object.keys(body).length === 0) throw new HttpError(400, 'No changes provided')
-		if (body.folderId !== undefined) await checkFolder(owner, body.folderId)
 		const updated = await prisma.$transaction(async (tx) => {
 			await lockUser(tx, owner)
 			await requireWritableAccount(tx, owner)
+			if (body.folderId !== undefined) await checkFolder(owner, body.folderId, tx)
 			const changed = await tx.file.updateMany({
 				where: { id: file.id, status: 'ready', isDeleted: false },
 				data: body,

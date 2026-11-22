@@ -836,6 +836,53 @@ paths['/api/auth/request-password-reset'] = {
 	),
 }
 
+const nativeAuthError = object({ code: str(), message: str() }, [])
+const newPassword = str({ format: 'password', minLength: 8, maxLength: 128 })
+const resetToken = str({ minLength: 1 })
+paths['/api/auth/reset-password'] = {
+	post: op(
+		'Auth',
+		'Redefinir a senha com o token de recuperação',
+		{
+			200: response(
+				'Senha redefinida e sessões anteriores revogadas',
+				object({ status: { type: 'boolean' } }),
+			),
+			400: response('Token inválido, expirado ou já usado, ou senha inválida', nativeAuthError),
+			403: response('Origem não permitida', nativeAuthError),
+			429: response('Limite de tentativas atingido'),
+		},
+		{
+			public: true,
+			description:
+				'Informe o token de uso único no corpo ou na query. A redefinição bem-sucedida encerra todas as sessões anteriores.',
+			parameters: [param('token', 'query', resetToken)],
+			requestBody: body(object({ token: resetToken, newPassword }, ['newPassword'])),
+		},
+	),
+}
+paths['/api/auth/change-password'] = {
+	post: op(
+		'Auth',
+		'Trocar a senha de uma conta autenticada',
+		{
+			200: response(
+				'Senha trocada. O cookie da sessão que fez a troca é renovado.',
+				object({ token: str(), user: ref('User') }),
+			),
+			400: response('Senha atual incorreta ou nova senha inválida', nativeAuthError),
+			401: response('Sessão ausente ou inválida'),
+			403: response('Origem não permitida', nativeAuthError),
+			429: response('Limite de tentativas atingido'),
+		},
+		{
+			description:
+				'O servidor revoga as sessões anteriores em toda troca válida e entrega uma nova sessão ao cliente que fez a troca.',
+			requestBody: body(object({ currentPassword: str({ format: 'password' }), newPassword })),
+		},
+	),
+}
+
 const decimalBytes = str({ pattern: '^-?\\d+$', description: 'Quantidade de bytes em decimal.' })
 const pagination = [
 	param('page', 'query', integer({ minimum: 1, maximum: 10000, default: 1 })),

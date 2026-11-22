@@ -55,6 +55,8 @@ export const auth = betterAuth({
 	],
 	hooks: {
 		before: createAuthMiddleware(async (ctx) => {
+			if (ctx.path === '/change-password')
+				return { context: { body: { revokeOtherSessions: true } } }
 			if (['/sign-up/email', '/update-user'].includes(ctx.path) && ctx.body?.image !== undefined)
 				throw new APIError('BAD_REQUEST', {
 					message: 'Use /users/me/avatar to change your profile image',

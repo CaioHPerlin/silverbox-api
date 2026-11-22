@@ -373,14 +373,53 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async (t)
 		const reused = await resetPassword()
 		assert.equal(reused.status, 400)
 		assert.equal((await reused.json()).code, 'INVALID_TOKEN')
-		const signInWithPassword = (password: string) =>
+		const signInWithPassword = (password: string, ip = '192.0.2.16') =>
 			fetch(`${baseURL}/api/auth/sign-in/email`, {
 				method: 'POST',
-				headers: frontHeaders,
+				headers: { ...frontHeaders, 'X-Real-IP': ip },
 				body: JSON.stringify({ email: nativeEmail, password }),
 			})
 		assert.equal((await signInWithPassword('correct-horse-battery-staple')).status, 401)
-		assert.equal((await signInWithPassword(newPassword)).status, 200)
+		const signIn = await signInWithPassword(newPassword)
+		assert.equal(signIn.status, 200)
+		const originalCookie = signIn.headers
+			.getSetCookie()
+			.find((header) => header.includes('session_token'))
+			?.split(';')[0]
+		const secondSignIn = await signInWithPassword(newPassword, '192.0.2.17')
+		assert.equal(secondSignIn.status, 200)
+		const secondCookie = secondSignIn.headers
+			.getSetCookie()
+			.find((header) => header.includes('session_token'))
+			?.split(';')[0]
+		assert.ok(originalCookie && secondCookie)
+		const finalPassword = 'rotated-silverbox-test-password'
+		const changePassword = (currentPassword: string, origin = frontHeaders.Origin) =>
+			fetch(`${baseURL}/api/auth/change-password`, {
+				method: 'POST',
+				headers: { ...frontHeaders, Origin: origin, Cookie: originalCookie },
+				body: JSON.stringify({
+					currentPassword,
+					newPassword: finalPassword,
+					revokeOtherSessions: false,
+				}),
+			})
+		const sessionStatus = (value: string) =>
+			fetch(`${baseURL}/users/me`, { headers: { Cookie: value } }).then((r) => r.status)
+
+		assert.equal((await changePassword(newPassword, 'https://untrusted.example')).status, 403)
+		assert.equal((await changePassword('another-invalid-current-password')).status, 400)
+		assert.equal(await sessionStatus(secondCookie), 200)
+		const changed = await changePassword(newPassword)
+		assert.equal(changed.status, 200)
+		assert.equal(await sessionStatus(originalCookie), 401)
+		assert.equal(await sessionStatus(secondCookie), 401)
+		const replacement = changed.headers
+			.getSetCookie()
+			.find((header) => header.includes('session_token'))
+			?.split(';')[0]
+		assert.ok(replacement)
+		assert.equal(await sessionStatus(replacement), 200)
 
 		assert.equal(
 			(
@@ -426,6 +465,8 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async (t)
 			'POST /api/auth/sign-out',
 			'GET /api/auth/get-session',
 			'POST /api/auth/request-password-reset',
+			'POST /api/auth/reset-password',
+			'POST /api/auth/change-password',
 		])
 	} finally {
 		server.kill('SIGTERM')

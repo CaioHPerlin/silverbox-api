@@ -139,6 +139,8 @@ curl -X POST http://localhost:8000/api/auth/request-password-reset \
   -d '{"email":"user@example.com","redirectTo":"http://localhost:5173/nova-senha"}'
 ```
 
+Para trocar a senha com uma sessão ativa, use `POST /api/auth/change-password` com `currentPassword` e `newPassword`. Depois de validar a senha atual, o servidor revoga todas as sessões anteriores e emite um novo cookie de sessão para o cliente que fez a troca.
+
 ### Operações administrativas
 
 Todos os endpoints em `/admin` exigem sessão admin. Mudanças também exigem a origem da API ou uma origem configurada em `FRONTEND_ORIGINS`. O Swagger documenta parâmetros, formatos e códigos de retorno.

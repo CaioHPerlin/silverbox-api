@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { audit } from '../lib/audit.js'
 import { pipeline } from 'node:stream/promises'
-import { SharePermission, type File, type SharedLink } from '@prisma/client'
+import { SharePermission, type File, type Prisma, type SharedLink } from '@prisma/client'
 import { fromNodeHeaders } from 'better-auth/node'
 import { Router, type NextFunction, type Request, type Response } from 'express'
 import { z } from 'zod'
@@ -679,8 +679,26 @@ sharesRouter.get(
 	'/',
 	route(async (req, res) => {
 		const owner = await userId(req)
-		const links = await prisma.sharedLink.findMany({
-			where: { userId: owner },
+		const number = (max: number) =>
+			z.string().regex(/^\d+$/).transform(Number).pipe(z.number().int().min(1).max(max))
+		const query = z
+			.object({
+				page: number(10000).optional(),
+				limit: number(100).optional(),
+				q: z.string().trim().max(155).optional(),
+			})
+			.parse(req.query)
+		const page = query.page ?? 1
+		const limit = query.limit ?? 50
+		const paginated =
+			query.page !== undefined || query.limit !== undefined || query.q !== undefined
+		const where: Prisma.SharedLinkWhereInput = {
+			userId: owner,
+			...(query.q ? { file: { originalName: { contains: query.q, mode: 'insensitive' } } } : {}),
+		}
+		const selection = prisma.sharedLink.findMany({
+			where,
+			...(paginated ? { skip: (page - 1) * limit, take: limit } : {}),
 			orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
 			select: {
 				...shareMetadata,
@@ -697,6 +715,11 @@ sharesRouter.get(
 				},
 			},
 		})
+		const [links, total] = paginated
+			? await prisma.$transaction([selection, prisma.sharedLink.count({ where })], {
+					isolationLevel: 'RepeatableRead',
+				})
+			: [await selection, undefined]
 		const now = new Date()
 		const shares = links.map((link) => {
 			const { user, file, ...metadata } = link
@@ -712,7 +735,7 @@ sharesRouter.get(
 				status: shareStatus(link, now),
 			}
 		})
-		res.json({ shares })
+		res.json(paginated ? { shares, page, limit, total } : { shares })
 	}),
 )
 

@@ -1,3 +1,5 @@
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import type { Prisma } from '@prisma/client'
 import { fromNodeHeaders } from 'better-auth/node'
 import { isAPIError } from 'better-auth/api'
@@ -9,6 +11,7 @@ import {
 	removeAdminUser,
 	updateAdminUser,
 } from '../lib/admin-users.js'
+import { adminMetrics } from '../lib/admin-metrics.js'
 import { audit } from '../lib/audit.js'
 import { auth } from '../lib/auth.js'
 import { expungeFile, fileJson, HttpError, trashFile } from '../lib/file-service.js'
@@ -223,4 +226,112 @@ adminRouter.delete('/files/:id/permanent', async (req, res) => {
 	if (await expungeFile(req, currentUser(res).id, file, 'admin_file_expunge'))
 		res.status(204).end()
 	else res.status(202).json({ status: 'deleting' })
+})
+
+const auditFilters = z.object({
+	since: z.iso.datetime({ offset: true }).optional(),
+	until: z.iso.datetime({ offset: true }).optional(),
+	userId: numericId.optional(),
+	action: z.string().trim().min(1).max(80).optional(),
+})
+const validPeriod = (filter: { since?: string; until?: string }) =>
+	!filter.since || !filter.until || new Date(filter.since) < new Date(filter.until)
+
+function auditWhere(filters: z.infer<typeof auditFilters>): Prisma.AuditLogWhereInput {
+	return {
+		userId: filters.userId,
+		action: filters.action,
+		createdAt: {
+			gte: filters.since ? new Date(filters.since) : undefined,
+			lt: filters.until ? new Date(filters.until) : undefined,
+		},
+	}
+}
+const auditOrder = [
+	{ createdAt: 'desc' },
+	{ id: 'desc' },
+] satisfies Prisma.AuditLogOrderByWithRelationInput[]
+const auditFields = {
+	id: true,
+	createdAt: true,
+	userId: true,
+	actorName: true,
+	actorEmail: true,
+	action: true,
+	ipAddress: true,
+	requestId: true,
+	details: true,
+} satisfies Prisma.AuditLogSelect
+
+adminRouter.get('/audit', async (req, res) => {
+	const { page, limit, ...filters } = auditFilters
+		.extend({
+			page: pageNumber.optional().default(1),
+			limit: pageLimit.optional().default(50),
+		})
+		.refine(validPeriod, 'Invalid date range')
+		.parse(req.query)
+	const where = auditWhere(filters)
+	const [logs, total] = await prisma.$transaction(
+		[
+			prisma.auditLog.findMany({
+				where,
+				select: auditFields,
+				orderBy: auditOrder,
+				...pageResult(page, limit),
+			}),
+			prisma.auditLog.count({ where }),
+		],
+		{ isolationLevel: 'RepeatableRead' },
+	)
+	res.json({ logs, total, page, limit })
+})
+
+function csvCell(value: string | number | null) {
+	let text = String(value ?? '')
+	if (/^[\s\uFEFF]*[=+@-]|^[\r\n\t]/.test(text)) text = "'" + text
+	return '"' + text.replaceAll('"', '""') + '"'
+}
+
+async function* auditCsv(where: Prisma.AuditLogWhereInput) {
+	yield '\uFEFFData UTC,Usuário ID,Nome,E-mail,Ação,IP,ID da requisição,Alvo\r\n'
+	let cursor: number | undefined
+	for (;;) {
+		const logs = await prisma.auditLog.findMany({
+			where,
+			select: auditFields,
+			orderBy: auditOrder,
+			take: 500,
+			...(cursor === undefined ? {} : { cursor: { id: cursor }, skip: 1 }),
+		})
+		for (const entry of logs) {
+			yield [
+				entry.createdAt.toISOString(),
+				entry.userId,
+				entry.actorName,
+				entry.actorEmail,
+				entry.action,
+				entry.ipAddress,
+				entry.requestId,
+				entry.details,
+			]
+				.map(csvCell)
+				.join(',') + '\r\n'
+		}
+		if (logs.length < 500) return
+		cursor = logs.at(-1)?.id
+	}
+}
+
+adminRouter.get('/audit/export', async (req, res) => {
+	const filters = auditFilters.refine(validPeriod, 'Invalid date range').parse(req.query)
+	res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+	res.setHeader('Content-Disposition', 'attachment; filename="silverbox-auditoria.csv"')
+	res.setHeader('X-Content-Type-Options', 'nosniff')
+	await pipeline(Readable.from(auditCsv(auditWhere(filters))), res)
+})
+
+adminRouter.get('/stats', async (req, res) => {
+	const { days } = z.object({ days: z.enum(['7', '30']).optional().default('7') }).parse(req.query)
+	res.json(await adminMetrics(days === '30' ? 30 : 7))
 })

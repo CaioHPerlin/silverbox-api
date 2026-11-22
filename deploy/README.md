@@ -42,6 +42,10 @@ Padrões: teto 10GiB, margem física de 100MiB e reserva percentual desabilitada
 
 Backup consistente: bloquear novas gravações/parar a API, gerar dump PostgreSQL e copiar todo o volume de arquivos antes de retomar. Guardar também o `.env` cifrado em local privado. Na restauração, recuperar banco e arquivos do mesmo ponto, conferir UID1000/modos e iniciar uma única API. Não restaurar somente os metadados nem somente os objetos. Validar download/SHA-256 após restauração.
 
+### Ensaio de restauração em 22/11/2026
+
+Com dados sintéticos em PostgreSQL 16 e um volume local, a API foi parada antes do `pg_dump -Fc` e do arquivamento dos arquivos. Restauramos o dump com `pg_restore --exit-on-error` em outro banco e os arquivos em um diretório vazio. Após iniciar a API com a mesma configuração de autenticação, a sessão anterior continuou válida. A pasta, os metadados e o histórico foram preservados, e o SHA-256 dos downloads das duas versões coincidiu com os arquivos originais. O ensaio não usou o banco ou o volume da Oracle.
+
 ## Limites da entrega
 
 Deploy não integra automaticamente as telas de arquivos do web: várias ainda usam dados simulados e o helper multipart não corresponde ao upload binário da API. O pipeline valida a publicação do frontend e sua configuração de autenticação. O consentimento Google real exige a conta e configuração do usuário e deve ser verificado no domínio final.

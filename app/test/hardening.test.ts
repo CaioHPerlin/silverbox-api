@@ -524,3 +524,92 @@ test('avatar is private, decoded, billed once on replacement and released on rem
 		await f.close()
 	}
 })
+
+test('folder mutations recheck their preconditions after taking the account lock', async () => {
+	const f = await fixture()
+	const db = new pg.Client({ connectionString: f.environment.DATABASE_URL })
+	try {
+		await f.start()
+		await db.connect()
+		const cookie = await signup()
+		const account = await fetch(baseURL + '/users/me', { headers: { Cookie: cookie } })
+		const { user } = await account.json()
+		const headers = { ...authHeaders, Cookie: cookie }
+		const create = await fetch(baseURL + '/folders', {
+			method: 'POST',
+			headers,
+			body: JSON.stringify({ name: 'Documentos' }),
+		})
+		assert.equal(create.status, 201)
+		const { folder } = await create.json()
+
+		async function duringAccountLock(
+			operation: (signal: AbortSignal) => Promise<Response>,
+			edit: () => Promise<unknown>,
+		) {
+			await db.query('BEGIN')
+			await db.query('SELECT id FROM silverbox_api.users WHERE id = $1 FOR UPDATE', [user.id])
+			const pending = operation(AbortSignal.timeout(7000))
+			try {
+				await until(async () => {
+					await db.query('SELECT pg_stat_clear_snapshot()')
+					const result = await db.query(
+						"SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'",
+					)
+					return Boolean(result.rowCount)
+				}, 'Folder mutation did not wait for the account lock')
+				await edit()
+				await db.query('COMMIT')
+			} catch (error) {
+				await db.query('ROLLBACK')
+				await pending.catch(() => {})
+				throw error
+			}
+			return pending
+		}
+
+		const deleted = await duringAccountLock(
+			(signal) =>
+				fetch(baseURL + '/folders/' + folder.id, { method: 'DELETE', headers, signal }),
+			() =>
+				db.query(
+					'INSERT INTO silverbox_api.folders (userid, parentfolderid, name, updatedat) VALUES ($1, $2, $3, now())',
+					[user.id, folder.id, 'Propostas'],
+				),
+		)
+		assert.equal(deleted.status, 409)
+		const children = await fetch(baseURL + '/folders?parentFolderId=' + folder.id, { headers })
+		assert.equal(children.status, 200)
+		assert.deepEqual(
+			(await children.json()).folders.map(({ name }: { name: string }) => name),
+			['Propostas'],
+		)
+
+		const destination = await fetch(baseURL + '/folders', {
+			method: 'POST',
+			headers,
+			body: JSON.stringify({ name: 'Arquivo' }),
+		})
+		assert.equal(destination.status, 201)
+		const { folder: parent } = await destination.json()
+		const moved = await duringAccountLock(
+			(signal) =>
+				fetch(baseURL + '/folders/' + folder.id, {
+					method: 'PATCH',
+					headers,
+					signal,
+					body: JSON.stringify({ parentFolderId: parent.id }),
+				}),
+			() => db.query('DELETE FROM silverbox_api.folders WHERE id = $1', [parent.id]),
+		)
+		assert.equal(moved.status, 404)
+		const roots = await fetch(baseURL + '/folders', { headers })
+		assert.deepEqual(
+			(await roots.json()).folders.map(({ name }: { name: string }) => name),
+			['Documentos'],
+		)
+	} finally {
+		await db.end()
+		await f.close()
+	}
+})

@@ -4,6 +4,7 @@ import { prismaAdapter } from 'better-auth/adapters/prisma'
 import { admin } from 'better-auth/plugins'
 import { env } from '../config/env.js'
 import { sendEmail, smtpConfigured } from './email.js'
+import { passwordResetEmail, passwordResetTtlMinutes } from './passwordResetEmail.js'
 import { prisma } from './prisma.js'
 
 export const auth = betterAuth({
@@ -17,15 +18,14 @@ export const auth = betterAuth({
 	},
 	emailAndPassword: {
 		enabled: true,
-		resetPasswordTokenExpiresIn: 15 * 60,
+		resetPasswordTokenExpiresIn: passwordResetTtlMinutes * 60,
 		revokeSessionsOnPasswordReset: true,
 		...(smtpConfigured
 			? {
 					sendResetPassword: async ({ user, url }) => {
 						void sendEmail({
 							to: user.email,
-							subject: 'Reset your Silverbox password',
-							text: `Hello ${user.name},\n\nUse this link to reset your Silverbox password. It expires in 15 minutes.\n\n${url}\n`,
+							...passwordResetEmail(user.name, url),
 						}).catch(() => {
 							console.error('[MAIL] Password reset email delivery failed')
 						})

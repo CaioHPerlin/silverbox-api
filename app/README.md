@@ -96,7 +96,7 @@ curl -b cookies.txt -H 'Origin: http://localhost:8000' \
 
 Veja [`../dados/arquivos.md`](../dados/arquivos.md) para **endpoint → corpo → resposta**. Para testar operações privadas no Swagger, execute primeiro `/auth/register` ou `/auth/login`; o navegador envia o cookie automaticamente.
 
-Google é opcional. Preencha as duas credenciais e configure o redirect URI `http://localhost:8000/api/auth/callback/google` no Google Cloud. Comece pelo navegador em `/auth/google`, mantendo o cookie de estado. Em produção use `${BETTER_AUTH_URL}/api/auth/callback/google`, com a origem HTTPS correta. Sem credenciais, `/auth/google` retorna `400` legível e o login por senha continua funcionando.
+Google é opcional. Preencha as duas credenciais e configure o redirect URI `http://localhost:8000/api/auth/callback/google` no Google Cloud. Comece pelo navegador em `/auth/google`, mantendo o cookie de estado. Em produção use `${BETTER_AUTH_URL}/api/auth/callback/google`, com a origem HTTPS correta. O front pode consultar `GET /auth/providers` para mostrar o botão apenas quando habilitado. Sem credenciais, `/auth/google` retorna `400` e o login por senha continua funcionando.
 
 ### Sessão e autorização administrativa
 
@@ -111,7 +111,7 @@ Google é opcional. Preencha as duas credenciais e configure o redirect URI `htt
 
 O Better Auth consulta o banco para ler a sessão e o papel. Promover ou rebaixar um usuário muda a autorização na próxima requisição, inclusive para cookies já emitidos. Revogar as sessões invalida esses cookies.
 
-As três rotas administrativas da tabela respondem sem corpo no `401`. No `403`, o Better Auth retorna o erro em JSON.
+As rotas nativas de listagem e revogação respondem sem corpo no `401`. A alteração de papel e os endpoints do produto respondem erros em JSON.
 
 Para provisionar o primeiro admin em um **banco local de teste**, cadastre uma conta descartável via Swagger e informe o e-mail dessa conta. Use a URL do banco local já configurada em `DATABASE_URL`.
 
@@ -131,13 +131,40 @@ Confira `UPDATE 1` e consulte `GET /users/me` com a sessão da conta. Com o admi
 
 A solicitação usa `POST /api/auth/request-password-reset`, exposto pelo Better Auth. Envie `email` e, opcionalmente, `redirectTo` com uma URL em uma origem confiável de `FRONTEND_ORIGINS`. O corpo de sucesso é igual para e-mails cadastrados e desconhecidos. Sem SMTP, o endpoint retorna `400` com `RESET_PASSWORD_DISABLED`.
 
-Configure juntas `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_SECURE` e `MAIL_FROM` no `.env`. Todas vazias deixam o envio desabilitado; configuração parcial impede a API de iniciar. `SMTP_SECURE=true` usa TLS direto. `SMTP_SECURE=false` exige STARTTLS. Em ambos os casos os certificados são verificados. As variáveis são genéricas: qualquer serviço que ofereça SMTP autenticado pode ser usado atualizando esses valores e o remetente permitido no serviço. A API aceita a solicitação sem aguardar a entrega; falhas são registradas sem dados do destinatário ou do link. Não há fila persistente nem repetição automática, então uma interrupção do processo pode perder envios pendentes. O token Better Auth expira em uma hora. O limite nativo é de três solicitações por minuto por IP; em produção, a API deve receber tráfego pelo proxy reverso (Traefik no deploy ou Caddy no Compose local), que define `X-Real-IP`. O acesso direto à API deve ficar restrito à rede interna.
+Configure juntas `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_SECURE` e `MAIL_FROM` no `.env`. Todas vazias deixam o envio desabilitado; configuração parcial impede a API de iniciar. `SMTP_SECURE=true` usa TLS direto. `SMTP_SECURE=false` exige STARTTLS. Em ambos os casos os certificados são verificados. As variáveis são genéricas: qualquer serviço que ofereça SMTP autenticado pode ser usado atualizando esses valores e o remetente permitido no serviço. A API aceita a solicitação sem aguardar a entrega; falhas são registradas sem dados do destinatário ou do link. Não há fila persistente nem repetição automática, então uma interrupção do processo pode perder envios pendentes. O token expira em 15 minutos e só pode ser usado uma vez. `POST /api/auth/reset-password` recebe `token` e `newPassword` e revoga todas as sessões anteriores. O limite nativo é de três solicitações por minuto por IP; em produção, a API deve receber tráfego pelo proxy reverso (Traefik no deploy ou Caddy no Compose local), que define `X-Real-IP`. O acesso direto à API deve ficar restrito à rede interna.
 
 ```sh
 curl -X POST http://localhost:8000/api/auth/request-password-reset \
   -H 'Origin: http://localhost:5173' -H 'Content-Type: application/json' \
-  -d '{"email":"user@example.com","redirectTo":"http://localhost:5173/reset-password"}'
+  -d '{"email":"user@example.com","redirectTo":"http://localhost:5173/nova-senha"}'
 ```
+
+### Operações administrativas
+
+Todos os endpoints em `/admin` exigem sessão admin. Mudanças também exigem a origem da API ou uma origem configurada em `FRONTEND_ORIGINS`. O Swagger documenta parâmetros, formatos e códigos de retorno.
+
+| Endpoint | Contrato |
+| --- | --- |
+| `GET /admin/users` | Contas e cotas com busca por nome ou email (`q`), `page` e `limit`. |
+| `POST /admin/users` e `PATCH /admin/users/:id` | Criar conta pelo Better Auth ou alterar papel, bloqueio e cota em bytes como string. Bloquear revoga sessões. Cota menor que uso mais reservas ou a remoção do último admin resultam em `409`. |
+| `DELETE /admin/users/:id` | Bloqueia a conta, revoga sessões e links, expurga os arquivos e versões e remove a conta. O admin atual não pode excluir a própria conta. Um `202` indica limpeza pendente. A conta permanece bloqueada e o admin pode repetir a operação. |
+| `GET /admin/files` | Pesquisa por nome, proprietário ou email, com paginação. `trash=true` lista os arquivos na lixeira. |
+| `GET /admin/files/:id/download` | Transmite os bytes do arquivo com o nome original e registra o administrador que baixou. |
+| `DELETE /admin/files/:id` e `DELETE /admin/files/:id/permanent` | Mover para a lixeira e revogar links, ou expurgar o arquivo após ele estar na lixeira. |
+| `GET /admin/audit` e `GET /admin/audit/export` | Consulta paginada e CSV UTF-8 de todos os resultados filtrados por `since`, `until`, `userId` e `action`. |
+| `GET /admin/stats?days=7` | Totais globais e tráfego diário em UTC para 7 ou 30 dias, com zeros nos dias sem eventos. |
+
+Cada evento novo carrega ator, ação, alvo, data, IP e ID da requisição. Acessos públicos pelo token registram ator anônimo e identificam o proprietário do arquivo. O CSV neutraliza fórmulas de planilha. A auditoria permanece disponível após remover usuários e não tem expiração automática. Registros anteriores à migração podem ter ID de requisição e volume transferido ausentes.
+
+O armazenamento global contabiliza versões, arquivos na lixeira, avatares e reservas. `trashBytes` é a fração de versões na lixeira e já está incluída em `usedBytes`. A série de tráfego só contabiliza bytes de eventos coletados após a migração, incluindo prévias públicas no tráfego de saída. Os números de bytes em `/admin/stats` são strings decimais.
+
+### Avatar
+
+`GET /users/me/avatar` serve a foto da sessão atual. `POST` recebe bytes brutos com `Content-Type: image/jpeg`, `image/png` ou `image/webp`, até 2 MiB. A API decodifica e normaliza o avatar para WebP. A referência relativa devolvida em `user.image` pode ser exibida usando a origem da API e credenciais. Os bytes da foto entram em `/storage/usage`. `DELETE /users/me/avatar` remove a foto e libera o espaço. A foto corrente é armazenada no PostgreSQL e incluída no backup do banco.
+
+### Paginação de compartilhamentos
+
+`GET /shares?page=1&limit=20&q=relatorio` devolve `{ shares, page, limit, total }`, com ordem por data de criação e ID decrescentes. `q` é opcional e busca por nome de arquivo. `limit` aceita de 1 a 100. A chamada sem parâmetros continua devolvendo `{ shares }`. O estado e a permissão vêm da API. `expiresAt: null` representa link sem expiração.
 
 ## Verificação
 

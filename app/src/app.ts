@@ -20,6 +20,7 @@ import {
 } from './middleware/error-handler.js'
 import { loggerMiddleware } from './middleware/logger.js'
 import { authRouter, usersRouter } from './routes/auth.js'
+import { adminRouter, nativeAdminRouter } from './routes/admin.js'
 import {
   filesRouter,
   foldersRouter,
@@ -50,11 +51,13 @@ export function createApp(): Application {
     }
   })
 
+  app.use('/api/auth/admin', nativeAdminRouter)
   app.all('/api/auth/*splat', toNodeHandler(auth))
   app.use(express.json())
 
   app.use('/auth', authRouter)
   app.use('/users', usersRouter)
+  app.use('/admin', adminRouter)
   app.use('/folders', foldersRouter)
   app.use('/files', filesRouter)
   app.use('/search', searchRouter)

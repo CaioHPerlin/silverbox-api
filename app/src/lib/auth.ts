@@ -41,9 +41,13 @@ export const auth = betterAuth({
 		ipAddress: { ipAddressHeaders: ['x-real-ip'] },
 	},
 	plugins: [admin({ schema: { user: { fields: { role: 'userRole' } } } })],
-	//The admin plugin is only used for roles. Switch off its ban and impersonation endpoints.
+	// The product handles account mutations that need storage and administrator invariants.
 	disabledPaths: [
 		'/admin/ban-user',
+		'/admin/set-role',
+		'/admin/remove-user',
+		'/admin/create-user',
+		'/admin/update-user',
 		'/admin/unban-user',
 		'/admin/impersonate-user',
 		'/admin/stop-impersonating',

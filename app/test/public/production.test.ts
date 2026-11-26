@@ -9,7 +9,7 @@ const base = 'https://api.silverbox.perlin.com.br'
 const web = 'https://silverbox.perlin.com.br'
 const run = randomUUID()
 const emails = [`public-${run}@example.com`, `other-${run}@example.com`]
-const password = randomUUID() + randomUUID()
+const password = `T!${randomUUID()}${randomUUID()}`
 const evidence: unknown[] = []
 // Equivalent to curl --resolve: preserve hostname, SNI and certificate validation.
 // Only used while an explicitly confirmed DNS record is negatively cached locally.

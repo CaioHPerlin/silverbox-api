@@ -1,10 +1,15 @@
 import swaggerJsdoc from 'swagger-jsdoc'
 import { env } from './env.js'
 import { billingPaths, billingSchemas } from './billing-swagger.js'
+import { maxPasswordLength, minPasswordLength } from '../lib/password-policy.js'
 
 type Schema = Record<string, unknown>
 const ref = (name: string): Schema => ({ $ref: `#/components/schemas/${name}` })
 const str = (extra: Schema = {}): Schema => ({ type: 'string', ...extra })
+const newPassword = str({
+	format: 'password', minLength: minPasswordLength, maxLength: maxPasswordLength,
+	description: 'Use pelo menos uma letra maiúscula e um símbolo, como @, ! ou #.',
+})
 const integer = (extra: Schema = {}): Schema => ({ type: 'integer', ...extra })
 const date = str({ format: 'date-time' })
 const object = (
@@ -147,7 +152,7 @@ const schemas: Record<string, Schema> = {
 	RegisterRequest: object({
 		name: str({ minLength: 1, maxLength: 155 }),
 		email: str({ format: 'email' }),
-		password: str({ format: 'password', minLength: 8, maxLength: 128 }),
+		password: newPassword,
 	}),
 	LoginRequest: object({ email: str({ format: 'email' }), password: str({ format: 'password' }) }),
 	PasswordResetRequest: object(
@@ -838,7 +843,6 @@ paths['/api/auth/request-password-reset'] = {
 }
 
 const nativeAuthError = object({ code: str(), message: str() }, [])
-const newPassword = str({ format: 'password', minLength: 8, maxLength: 128 })
 const resetToken = str({ minLength: 1 })
 paths['/api/auth/reset-password'] = {
 	post: op(
@@ -1020,7 +1024,7 @@ paths['/admin/users'] = {
 					{
 						name,
 						email: str({ format: 'email' }),
-						password: str({ minLength: 8, maxLength: 128 }),
+						password: newPassword,
 						role: userRole,
 					},
 					['name', 'email', 'password'],

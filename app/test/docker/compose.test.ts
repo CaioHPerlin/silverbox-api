@@ -42,7 +42,7 @@ test(
 				body: JSON.stringify({
 					name: 'Docker Front',
 					email: `${randomUUID()}@example.com`,
-					password: 'correct-horse-battery-staple',
+					password: 'Correct-horse-battery-staple',
 				}),
 			})
 			assert.equal(signup.status, 200)

@@ -9,6 +9,7 @@ import { test } from 'node:test'
 import pg from 'pg'
 import { SMTPServer } from 'smtp-server'
 import { generate } from 'selfsigned'
+import { hashPassword } from 'better-auth/crypto'
 import { assertOperationsCovered, validateHttpContracts } from './contracts.js'
 
 const baseURL = process.env.BETTER_AUTH_URL ?? 'http://127.0.0.1:18000'
@@ -150,13 +151,27 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async (t)
 		assert.equal((await fetch(`${baseURL}/health/ready`)).status, 200)
 		assert.equal((await fetch(`${baseURL}/docs`)).status, 200)
 		const email = `auth-${randomUUID()}@example.com`
+		const examplePassword = 'Teste@123'
+		for (const [path, password, code] of [
+			['/auth/register', 'Aa@1234', 'PASSWORD_TOO_SHORT'],
+			['/api/auth/sign-up/email', 'teste@123', 'PASSWORD_MISSING_UPPERCASE'],
+			['/api/auth/sign-up/email', 'Teste123', 'PASSWORD_MISSING_SYMBOL'],
+		]) {
+			const rejected = await fetch(`${baseURL}${path}`, {
+				method: 'POST',
+				headers: { Origin: baseURL, 'Content-Type': 'application/json', 'X-Real-IP': '192.0.2.41' },
+				body: JSON.stringify({ name: 'Test User', email, password }),
+			})
+			assert.equal(rejected.status, 400)
+			assert.equal((await rejected.json()).code, code)
+		}
 		const signup = await fetch(`${baseURL}/auth/register`, {
 			method: 'POST',
 			headers: { Origin: baseURL, 'Content-Type': 'application/json' },
 			body: JSON.stringify({
 				name: 'Test User',
 				email,
-				password: 'correct-horse-battery-staple',
+				password: examplePassword,
 			}),
 		})
 		assert.equal(signup.status, 200)
@@ -203,10 +218,11 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async (t)
 		const signin = await fetch(`${baseURL}/auth/login`, {
 			method: 'POST',
 			headers: { Origin: baseURL, 'Content-Type': 'application/json' },
-			body: JSON.stringify({ email, password: 'correct-horse-battery-staple' }),
+			body: JSON.stringify({ email, password: examplePassword }),
 		})
 		assert.equal(signin.status, 200)
 		const nativeEmail = `native-${randomUUID()}@example.com`
+		const nativePassword = 'Teste@12'
 		const frontHeaders = { Origin: 'http://localhost:5173', 'Content-Type': 'application/json' }
 		const nativeSignup = await fetch(`${baseURL}/api/auth/sign-up/email`, {
 			method: 'POST',
@@ -214,14 +230,14 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async (t)
 			body: JSON.stringify({
 				name: 'Front <User> & Equipe',
 				email: nativeEmail,
-				password: 'correct-horse-battery-staple',
+				password: nativePassword,
 			}),
 		})
 		assert.equal(nativeSignup.status, 200)
 		const nativeSignin = await fetch(`${baseURL}/api/auth/sign-in/email`, {
 			method: 'POST',
 			headers: frontHeaders,
-			body: JSON.stringify({ email: nativeEmail, password: 'correct-horse-battery-staple' }),
+			body: JSON.stringify({ email: nativeEmail, password: nativePassword }),
 		})
 		assert.equal(nativeSignin.status, 200)
 		assert.equal(nativeSignin.headers.get('access-control-allow-origin'), 'http://localhost:5173')
@@ -370,13 +386,16 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async (t)
 		assert.equal(freshCallback.status, 302)
 		const freshToken = new URL(freshCallback.headers.get('location')!).searchParams.get('token')
 		assert.ok(freshToken)
-		const newPassword = 'updated-silverbox-test-password'
-		const resetPassword = () =>
+		const newPassword = 'Updated-silverbox-test-password'
+		const resetPassword = (password = newPassword, ip = '192.0.2.16') =>
 			fetch(`${baseURL}/api/auth/reset-password`, {
 				method: 'POST',
-				headers: frontHeaders,
-				body: JSON.stringify({ token: freshToken, newPassword }),
+				headers: { ...frontHeaders, 'X-Real-IP': ip },
+				body: JSON.stringify({ token: freshToken, newPassword: password }),
 			})
+		const rejectedReset = await resetPassword('Teste123', '192.0.2.41')
+		assert.equal(rejectedReset.status, 400)
+		assert.equal((await rejectedReset.json()).code, 'PASSWORD_MISSING_SYMBOL')
 		const reset = await resetPassword()
 		assert.equal(reset.status, 200)
 		assert.deepEqual(await reset.json(), { status: true })
@@ -393,7 +412,7 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async (t)
 				headers: { ...frontHeaders, 'X-Real-IP': ip },
 				body: JSON.stringify({ email: nativeEmail, password }),
 			})
-		assert.equal((await signInWithPassword('correct-horse-battery-staple')).status, 401)
+		assert.equal((await signInWithPassword(nativePassword)).status, 401)
 		const signIn = await signInWithPassword(newPassword)
 		assert.equal(signIn.status, 200)
 		const originalCookie = signIn.headers
@@ -407,14 +426,14 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async (t)
 			.find((header) => header.includes('session_token'))
 			?.split(';')[0]
 		assert.ok(originalCookie && secondCookie)
-		const finalPassword = 'rotated-silverbox-test-password'
-		const changePassword = (currentPassword: string, origin = frontHeaders.Origin) =>
+		const finalPassword = 'Rotated-silverbox-test-password'
+		const changePassword = (currentPassword: string, origin = frontHeaders.Origin, password = finalPassword) =>
 			fetch(`${baseURL}/api/auth/change-password`, {
 				method: 'POST',
 				headers: { ...frontHeaders, Origin: origin, Cookie: originalCookie },
 				body: JSON.stringify({
 					currentPassword,
-					newPassword: finalPassword,
+					newPassword: password,
 					revokeOtherSessions: false,
 				}),
 			})
@@ -423,6 +442,9 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async (t)
 
 		assert.equal((await changePassword(newPassword, 'https://untrusted.example')).status, 403)
 		assert.equal((await changePassword('another-invalid-current-password')).status, 400)
+		const rejectedChange = await changePassword(newPassword, frontHeaders.Origin, 'teste@123')
+		assert.equal(rejectedChange.status, 400)
+		assert.equal((await rejectedChange.json()).code, 'PASSWORD_MISSING_UPPERCASE')
 		assert.equal(await sessionStatus(secondCookie), 200)
 		const changed = await changePassword(newPassword)
 		assert.equal(changed.status, 200)
@@ -547,15 +569,16 @@ test('administrative routes enforce the current role and reject revoked sessions
 	}
 
 	async function register(name: string) {
+		const email = `role-${randomUUID()}@example.com`
 		const response = await request('/auth/register', undefined, {
 			name,
-			email: `role-${randomUUID()}@example.com`,
-			password: 'correct-horse-battery-staple',
+			email,
+			password: 'Correct-horse-battery-staple',
 		})
 		assert.equal(response.status, 200)
 		const cookie = response.headers.get('set-cookie')?.split(';')[0]
 		assert.ok(cookie)
-		return { cookie, id: (await response.json()).user.id as string }
+		return { cookie, email, id: (await response.json()).user.id as string }
 	}
 
 	try {
@@ -571,6 +594,9 @@ test('administrative routes enforce the current role and reject revoked sessions
 				[operator.id],
 			)
 			assert.equal(result.rowCount, 1)
+			await database.query("UPDATE silverbox_api.account SET password = $1 WHERE userid = $2 AND providerid = 'credential'", [
+				await hashPassword('12345678'), member.id,
+			])
 		} finally {
 			await database.end()
 		}
@@ -581,6 +607,16 @@ test('administrative routes enforce the current role and reject revoked sessions
 		const readNativeSession = '/api/auth/get-session'
 		const roleChange = { userId: member.id, role: ['user', 'admin'] }
 		const revocation = { userId: member.id }
+		assert.equal((await request('/api/auth/sign-in/email', undefined, {
+			email: member.email,
+			password: '12345678',
+		})).status, 200)
+		const setPassword = '/api/auth/admin/set-user-password'
+		const weakPassword = { userId: member.id, newPassword: 'senha@123' }
+		assert.equal((await request(setPassword, member.cookie, weakPassword)).status, 403)
+		const rejected = await request(setPassword, operator.cookie, weakPassword)
+		assert.equal(rejected.status, 400)
+		assert.equal((await rejected.json()).code, 'PASSWORD_MISSING_UPPERCASE')
 		const anonymous = await request(listUsers)
 		assert.equal(anonymous.status, 401)
 		assert.equal(await anonymous.text(), '')

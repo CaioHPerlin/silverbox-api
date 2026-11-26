@@ -53,7 +53,7 @@ async function register(name: string) {
 		body: JSON.stringify({
 			name,
 			email: `${name}-${randomUUID()}@example.com`,
-			password: 'correct-horse-battery-staple',
+			password: 'Correct-horse-battery-staple',
 		}),
 	})
 	assert.equal(response.status, 200)

@@ -134,7 +134,7 @@ test('Sandbox purchases, webhook recovery and storage integrate with PostgreSQL'
 	async function register() {
 		const response = await fetch(`${baseURL}/auth/register`, {
 			method: 'POST', headers: { ...json, Origin: env.BETTER_AUTH_URL },
-			body: JSON.stringify({ name: 'Billing Test', email: `${randomUUID()}@example.com`, password: 'correct-horse-battery-staple' }),
+			body: JSON.stringify({ name: 'Billing Test', email: `${randomUUID()}@example.com`, password: 'Correct-horse-battery-staple' }),
 		})
 		assert.equal(response.status, 200)
 		const loginCookie = response.headers.get('set-cookie')?.split(';')[0]

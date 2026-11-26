@@ -15,6 +15,7 @@ import { adminMetrics } from '../lib/admin-metrics.js'
 import { audit } from '../lib/audit.js'
 import { auth } from '../lib/auth.js'
 import { expungeFile, fileJson, HttpError, trashFile } from '../lib/file-service.js'
+import { newPasswordError } from '../lib/password-policy.js'
 import { prisma } from '../lib/prisma.js'
 import { currentUser, requireRole } from '../middleware/auth.js'
 import { requireTrustedMutationOrigin } from '../middleware/trusted-origin.js'
@@ -50,7 +51,7 @@ const quota = z
 const createUser = z.object({
 	name: z.string().trim().min(1).max(155),
 	email: z.email().max(155),
-	password: z.string().min(8).max(128),
+	password: z.string(),
 	role: role.default('user'),
 })
 const changeUser = z
@@ -132,13 +133,15 @@ adminRouter.get('/users', async (req, res) => {
 
 async function registerUser(req: Request, actorId: number) {
 	const body = createUser.parse(req.body)
+	const policyError = newPasswordError(body.password)
+	if (policyError) throw new HttpError(400, policyError.message, policyError.code)
 	try {
 		const result = await auth.api.createUser({ body, headers: fromNodeHeaders(req.headers) })
 		await audit(req, actorId, 'admin_user_create', `user:${Number(result.user.id)}`)
 		return result
 	} catch (error) {
 		if (isAPIError(error))
-			throw new HttpError(error.statusCode, error.body?.message ?? 'Unable to create user')
+			throw new HttpError(error.statusCode, error.body?.message ?? 'Unable to create user', error.body?.code)
 		throw error
 	}
 }

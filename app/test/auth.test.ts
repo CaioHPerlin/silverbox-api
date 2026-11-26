@@ -9,6 +9,7 @@ import { test } from 'node:test'
 import pg from 'pg'
 import { SMTPServer } from 'smtp-server'
 import { generate } from 'selfsigned'
+import { hashPassword } from 'better-auth/crypto'
 import { assertOperationsCovered, validateHttpContracts } from './contracts.js'
 
 const baseURL = process.env.BETTER_AUTH_URL ?? 'http://127.0.0.1:18000'
@@ -150,6 +151,18 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async (t)
 		assert.equal((await fetch(`${baseURL}/health/ready`)).status, 200)
 		assert.equal((await fetch(`${baseURL}/docs`)).status, 200)
 		const email = `auth-${randomUUID()}@example.com`
+		for (const [path, password, code] of [
+			['/auth/register', '12345678', 'PASSWORD_TOO_SHORT'],
+			['/api/auth/sign-up/email', '123456789012345', 'PASSWORD_TOO_COMMON'],
+		]) {
+			const rejected = await fetch(`${baseURL}${path}`, {
+				method: 'POST',
+				headers: { Origin: baseURL, 'Content-Type': 'application/json', 'X-Real-IP': '192.0.2.41' },
+				body: JSON.stringify({ name: 'Test User', email, password }),
+			})
+			assert.equal(rejected.status, 400)
+			assert.equal((await rejected.json()).code, code)
+		}
 		const signup = await fetch(`${baseURL}/auth/register`, {
 			method: 'POST',
 			headers: { Origin: baseURL, 'Content-Type': 'application/json' },
@@ -371,12 +384,15 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async (t)
 		const freshToken = new URL(freshCallback.headers.get('location')!).searchParams.get('token')
 		assert.ok(freshToken)
 		const newPassword = 'updated-silverbox-test-password'
-		const resetPassword = () =>
+		const resetPassword = (password = newPassword, ip = '192.0.2.16') =>
 			fetch(`${baseURL}/api/auth/reset-password`, {
 				method: 'POST',
-				headers: frontHeaders,
-				body: JSON.stringify({ token: freshToken, newPassword }),
+				headers: { ...frontHeaders, 'X-Real-IP': ip },
+				body: JSON.stringify({ token: freshToken, newPassword: password }),
 			})
+		const rejectedReset = await resetPassword('passwordpassword', '192.0.2.41')
+		assert.equal(rejectedReset.status, 400)
+		assert.equal((await rejectedReset.json()).code, 'PASSWORD_TOO_COMMON')
 		const reset = await resetPassword()
 		assert.equal(reset.status, 200)
 		assert.deepEqual(await reset.json(), { status: true })
@@ -408,13 +424,13 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async (t)
 			?.split(';')[0]
 		assert.ok(originalCookie && secondCookie)
 		const finalPassword = 'rotated-silverbox-test-password'
-		const changePassword = (currentPassword: string, origin = frontHeaders.Origin) =>
+		const changePassword = (currentPassword: string, origin = frontHeaders.Origin, password = finalPassword) =>
 			fetch(`${baseURL}/api/auth/change-password`, {
 				method: 'POST',
 				headers: { ...frontHeaders, Origin: origin, Cookie: originalCookie },
 				body: JSON.stringify({
 					currentPassword,
-					newPassword: finalPassword,
+					newPassword: password,
 					revokeOtherSessions: false,
 				}),
 			})
@@ -423,6 +439,9 @@ test('auth signup, signin, session, and signout work with PostgreSQL', async (t)
 
 		assert.equal((await changePassword(newPassword, 'https://untrusted.example')).status, 403)
 		assert.equal((await changePassword('another-invalid-current-password')).status, 400)
+		const rejectedChange = await changePassword(newPassword, frontHeaders.Origin, '12345678')
+		assert.equal(rejectedChange.status, 400)
+		assert.equal((await rejectedChange.json()).code, 'PASSWORD_TOO_SHORT')
 		assert.equal(await sessionStatus(secondCookie), 200)
 		const changed = await changePassword(newPassword)
 		assert.equal(changed.status, 200)
@@ -547,15 +566,16 @@ test('administrative routes enforce the current role and reject revoked sessions
 	}
 
 	async function register(name: string) {
+		const email = `role-${randomUUID()}@example.com`
 		const response = await request('/auth/register', undefined, {
 			name,
-			email: `role-${randomUUID()}@example.com`,
+			email,
 			password: 'correct-horse-battery-staple',
 		})
 		assert.equal(response.status, 200)
 		const cookie = response.headers.get('set-cookie')?.split(';')[0]
 		assert.ok(cookie)
-		return { cookie, id: (await response.json()).user.id as string }
+		return { cookie, email, id: (await response.json()).user.id as string }
 	}
 
 	try {
@@ -571,6 +591,9 @@ test('administrative routes enforce the current role and reject revoked sessions
 				[operator.id],
 			)
 			assert.equal(result.rowCount, 1)
+			await database.query("UPDATE silverbox_api.account SET password = $1 WHERE userid = $2 AND providerid = 'credential'", [
+				await hashPassword('12345678'), member.id,
+			])
 		} finally {
 			await database.end()
 		}
@@ -581,6 +604,16 @@ test('administrative routes enforce the current role and reject revoked sessions
 		const readNativeSession = '/api/auth/get-session'
 		const roleChange = { userId: member.id, role: ['user', 'admin'] }
 		const revocation = { userId: member.id }
+		assert.equal((await request('/api/auth/sign-in/email', undefined, {
+			email: member.email,
+			password: '12345678',
+		})).status, 200)
+		const setPassword = '/api/auth/admin/set-user-password'
+		const weakPassword = { userId: member.id, newPassword: 'qwertyuiopasdfgh' }
+		assert.equal((await request(setPassword, member.cookie, weakPassword)).status, 403)
+		const rejected = await request(setPassword, operator.cookie, weakPassword)
+		assert.equal(rejected.status, 400)
+		assert.equal((await rejected.json()).code, 'PASSWORD_TOO_COMMON')
 		const anonymous = await request(listUsers)
 		assert.equal(anonymous.status, 401)
 		assert.equal(await anonymous.text(), '')

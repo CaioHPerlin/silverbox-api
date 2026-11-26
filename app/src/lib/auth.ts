@@ -1,9 +1,10 @@
 import { betterAuth } from 'better-auth'
-import { APIError, createAuthMiddleware } from 'better-auth/api'
+import { APIError, createAuthMiddleware, getAuthoritativeSessionFromCtx } from 'better-auth/api'
 import { prismaAdapter } from 'better-auth/adapters/prisma'
 import { admin } from 'better-auth/plugins'
 import { env } from '../config/env.js'
 import { sendEmail, smtpConfigured } from './email.js'
+import { maxPasswordLength, minPasswordLength, newPasswordError } from './password-policy.js'
 import { passwordResetEmail, passwordResetTtlMinutes } from './passwordResetEmail.js'
 import { prisma } from './prisma.js'
 
@@ -18,6 +19,8 @@ export const auth = betterAuth({
 	},
 	emailAndPassword: {
 		enabled: true,
+		minPasswordLength,
+		maxPasswordLength,
 		resetPasswordTokenExpiresIn: passwordResetTtlMinutes * 60,
 		revokeSessionsOnPasswordReset: true,
 		...(smtpConfigured
@@ -55,7 +58,23 @@ export const auth = betterAuth({
 	],
 	hooks: {
 		before: createAuthMiddleware(async (ctx) => {
-			if (ctx.path === '/change-password')
+			const changingPassword = ctx.path === '/change-password'
+			const adminSettingPassword = ctx.path === '/admin/set-user-password'
+			const signingUp = ctx.path === '/sign-up/email'
+			if (signingUp || ctx.path === '/reset-password' || changingPassword || adminSettingPassword) {
+				const password = signingUp ? ctx.body?.password : ctx.body?.newPassword
+				const error = typeof password === 'string' ? newPasswordError(password) : null
+				if (error) {
+					if (!changingPassword && !adminSettingPassword) throw new APIError('BAD_REQUEST', error)
+
+					// Preserve the endpoint's authorization error for requests that cannot change passwords.
+					const session = await getAuthoritativeSessionFromCtx(ctx)
+					const role = (session?.user as { role?: string | null } | undefined)?.role
+					if (session && (!adminSettingPassword || role?.split(',').includes('admin')))
+						throw new APIError('BAD_REQUEST', error)
+				}
+			}
+			if (changingPassword)
 				return { context: { body: { revokeOtherSessions: true } } }
 			if (['/sign-up/email', '/update-user'].includes(ctx.path) && ctx.body?.image !== undefined)
 				throw new APIError('BAD_REQUEST', {

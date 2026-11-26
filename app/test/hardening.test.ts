@@ -346,6 +346,13 @@ test('admin contracts join accounts, storage operations, audit and metrics witho
 			operatorAccount.id,
 		])
 		const email = `admin-target-${randomUUID()}@example.com`
+		for (const path of ['/admin/users', '/api/auth/admin/create-user']) {
+			const rejected = await request(path, operator, 'POST', {
+				name: 'Pessoa de teste', email, password: 'passwordpassword',
+			})
+			assert.equal(rejected.status, 400)
+			assert.equal((await rejected.json()).code, 'PASSWORD_TOO_COMMON')
+		}
 		const create = await request('/admin/users', operator, 'POST', {
 			name: '=Pessoa de teste',
 			email,
@@ -353,6 +360,11 @@ test('admin contracts join accounts, storage operations, audit and metrics witho
 		})
 		assert.equal(create.status, 201, await create.clone().text())
 		const target = (await create.json()).user
+		const duplicate = await request('/admin/users', operator, 'POST', {
+			name: 'Pessoa de teste', email, password,
+		})
+		assert.equal(duplicate.status, 400)
+		assert.equal((await duplicate.json()).code, 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL')
 		const signedIn = await request('/auth/login', undefined, 'POST', { email, password })
 		assert.equal(signedIn.status, 200)
 		const owner = signedIn.headers.get('set-cookie')!.split(';')[0]!

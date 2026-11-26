@@ -106,7 +106,7 @@ export function createApp(paymentService = billing): Application {
         if (error.status === 429) {
           res.setHeader('Retry-After', '1')
         }
-        res.status(error.status).json({ error: error.message })
+        res.status(error.status).json({ error: error.message, code: error.code })
         return
       }
 

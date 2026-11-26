@@ -181,7 +181,12 @@ test(
 				.split(';')[0]
 			assert.equal((await request('/api/auth/get-session', 'GET', loginCookie)).status, 200)
 			assert.equal((await request('/auth/logout', 'POST', loginCookie, {})).status, 200)
-			assert.equal((await request('/auth/google')).status, 400)
+			const providers = await request('/auth/providers')
+			assert.equal(providers.status, 200)
+			const { google } = await providers.json()
+			assert.equal(typeof google, 'boolean')
+			const googleRedirect = await fetch(`${base}/auth/google`, { redirect: 'manual' })
+			assert.equal(googleRedirect.status, google ? 302 : 400)
 		} finally {
 			if (fileId && cookie) {
 				await request(`/files/${fileId}`, 'DELETE', cookie)

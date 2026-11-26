@@ -146,6 +146,9 @@ export async function removeAdminUser(req: Request, actorId: number, id: number)
 		await lockUser(tx, id)
 		if (!target.deletionPending || (await tx.file.count({ where: { userId: id } }))) return false
 		await tx.folder.updateMany({ where: { userId: id }, data: { parentFolderId: null } })
+		await tx.billingGrant.deleteMany({ where: { userId: id } })
+		await tx.billingPurchase.deleteMany({ where: { userId: id } })
+		await tx.billingCustomer.deleteMany({ where: { userId: id } })
 		await tx.user.delete({ where: { id } })
 		await audit(req, actorId, 'admin_user_delete', `user:${id}`, tx)
 		return true

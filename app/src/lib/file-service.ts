@@ -37,20 +37,28 @@ export function versionJson(version: FileVersion) {
 }
 
 export async function usage(userId: number, tx: Transaction | typeof prisma = prisma) {
-	const [user, versions, reservations, avatar] = await Promise.all([
+	const now = new Date()
+	const [user, versions, reservations, avatar, grant] = await Promise.all([
 		tx.user.findUnique({ where: { id: userId }, select: { quotaLimitBytes: true } }),
 		tx.fileVersion.aggregate({ where: { file: { userId } }, _sum: { sizeBytes: true } }),
 		tx.uploadReservation.aggregate({ where: { userId }, _sum: { sizeBytes: true } }),
 		tx.avatar.findUnique({ where: { userId }, select: { sizeBytes: true } }),
+		env.BILLING_MODE === 'sandbox' ? tx.billingGrant.findFirst({
+			where: { userId, startsAt: { lte: now }, endsAt: { gt: now }, revokedAt: null },
+			orderBy: { storageBytes: 'desc' },
+			select: { storageBytes: true },
+		}) : null,
 	])
 	if (!user) throw new HttpError(401, 'User not found')
 	const used = (versions._sum.sizeBytes ?? 0n) + (avatar?.sizeBytes ?? 0n)
 	const reserved = reservations._sum.sizeBytes ?? 0n
+	const limit = grant && grant.storageBytes > user.quotaLimitBytes ? grant.storageBytes : user.quotaLimitBytes
+	const available = limit - used - reserved
 	return {
 		used,
 		reserved,
-		limit: user.quotaLimitBytes,
-		available: user.quotaLimitBytes - used - reserved,
+		limit,
+		available: available < 0n ? 0n : available,
 	}
 }
 

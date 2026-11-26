@@ -27,7 +27,7 @@ export const corsMiddleware: RequestHandler = (req, res, next) => {
 		res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS')
 		res.setHeader(
 			'Access-Control-Allow-Headers',
-			'Content-Type, X-File-Name, X-File-Size, X-File-Mime, X-Folder-Id',
+			'Content-Type, Idempotency-Key, X-File-Name, X-File-Size, X-File-Mime, X-Folder-Id',
 		)
 		res.setHeader('Access-Control-Max-Age', '600')
 		res.status(204).end()

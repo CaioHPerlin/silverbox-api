@@ -48,7 +48,23 @@ Com dados sintéticos em PostgreSQL 16 e um volume local, a API foi parada antes
 
 ## Limites da entrega
 
-Deploy não integra automaticamente as telas de arquivos do web: várias ainda usam dados simulados e o helper multipart não corresponde ao upload binário da API. O pipeline valida a publicação do frontend e sua configuração de autenticação. O consentimento Google real exige a conta e configuração do usuário e deve ser verificado no domínio final.
+Deploy não integra automaticamente as telas de arquivos do web: várias ainda usam dados simulados e o helper multipart não corresponde ao upload binário da API. O pipeline valida a publicação do frontend e sua configuração de autenticação.
+
+## Login com Google
+
+1. No Google Auth Platform, crie ou selecione um cliente OAuth do tipo **Aplicativo da Web** para o ambiente. Em **URIs de redirecionamento autorizados**, cadastre `https://API_HOST/api/auth/callback/google` com o domínio exato da API. Em homologação, confira o acesso da conta de teste em **Público-alvo**. Use um projeto OAuth separado para produção. [Google Auth Platform](https://console.cloud.google.com/auth/clients) · [Política de OAuth do Google](https://developers.google.com/identity/verification/authentication-policy-compliance)
+2. No `.env` privado da API desse ambiente, configure `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` juntos. Confira se `BETTER_AUTH_URL` aponta para a origem da API e se `FRONTEND_ORIGINS` inclui a origem da web. Na Oracle, o Compose define `BETTER_AUTH_URL` a partir de `API_HOST`. Recrie o serviço `api` pelo Compose com a imagem da release atual e aguarde `/health/ready` retornar 200. Um `restart` simples mantém as variáveis com que o contêiner foi criado.
+3. Na raiz do repositório, execute a checagem com as origens reais do ambiente, sem barra final. Ela verifica a origem enviada pelo frontend e o callback apresentado ao Google.
+
+   ```bash
+   SILVERBOX_API_ORIGIN=https://API_HOST \
+     SILVERBOX_WEB_ORIGIN=https://WEB_HOST \
+     node --test deploy/google-oauth.test.ts
+   ```
+
+4. Em uma janela sem sessão prévia no Silverbox, abra `/login` na web, clique em **Entre com o Google** e conclua o login com a conta de teste. Confirme o retorno a `/home` e recarregue a página. Na aba Rede do navegador, confira se `/api/auth/get-session` retorna uma sessão da conta usada. Registre o ambiente, a data e o resultado sem copiar cookies, códigos ou tokens.
+
+Em produção, se o botão estiver disponível, consulte `/auth/providers`. `{"google":false}` indica que a API está sem o provedor. Com `{"google":true}`, rode a mesma checagem com as origens públicas e confira o cadastro do callback abaixo no cliente OAuth de produção. O redirecionamento da API pode funcionar mesmo quando o Google rejeita o cliente ou o callback. O login no navegador confirma a troca do código e a criação da sessão.
 
 ## Domínios desta instância
 

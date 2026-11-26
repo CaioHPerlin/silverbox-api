@@ -38,6 +38,13 @@ const envSchema = z
 		SMTP_SECURE: z.preprocess(emptyToUndefined, z.enum(['true', 'false']).optional()),
 		MAIL_FROM: z.preprocess(emptyToUndefined, z.string().trim().min(1).optional()),
 
+		BILLING_MODE: z.enum(['disabled', 'sandbox']).default('disabled'),
+		ASAAS_API_KEY: z.string().trim().optional(),
+		ASAAS_WEBHOOK_TOKEN: z.string().trim().optional(),
+		BILLING_RETURN_ORIGIN: z.string().trim().optional(),
+		BILLING_PUBLIC_RETURN_ORIGIN: z.string().trim().optional(),
+		BILLING_MAX_CHARGE_CENTS: z.string().trim().optional(),
+
 		LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 		STORAGE_ROOT: z
 			.string()
@@ -94,6 +101,36 @@ const envSchema = z
 					'SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_SECURE and MAIL_FROM must be set together',
 			})
 
+		if (value.BILLING_MODE === 'sandbox') {
+			if (!value.ASAAS_API_KEY) context.addIssue({
+				code: 'custom', path: ['ASAAS_API_KEY'], message: 'Required in Sandbox mode',
+			})
+			if (!value.ASAAS_WEBHOOK_TOKEN || value.ASAAS_WEBHOOK_TOKEN.length < 32 ||
+				value.ASAAS_WEBHOOK_TOKEN === value.ASAAS_API_KEY) context.addIssue({
+				code: 'custom', path: ['ASAAS_WEBHOOK_TOKEN'], message: 'Use a dedicated token of at least 32 characters',
+			})
+			const origin = URL.parse(value.BILLING_RETURN_ORIGIN ?? '')
+			if (!origin || origin.origin !== value.BILLING_RETURN_ORIGIN ||
+				(origin.protocol !== 'https:' && !(origin.protocol === 'http:' && origin.hostname === 'localhost'))) {
+				context.addIssue({
+					code: 'custom', path: ['BILLING_RETURN_ORIGIN'], message: 'Use an HTTPS origin or an HTTP localhost origin',
+				})
+			}
+			if (value.BILLING_PUBLIC_RETURN_ORIGIN) {
+				const publicOrigin = URL.parse(value.BILLING_PUBLIC_RETURN_ORIGIN)
+				if (publicOrigin?.protocol !== 'https:' || publicOrigin.origin !== value.BILLING_PUBLIC_RETURN_ORIGIN) {
+					context.addIssue({
+						code: 'custom', path: ['BILLING_PUBLIC_RETURN_ORIGIN'], message: 'Use an HTTPS origin without a path or trailing slash',
+					})
+				}
+			}
+			const limit = value.BILLING_MAX_CHARGE_CENTS ?? ''
+			if (!/^\d+$/.test(limit) || !Number.isSafeInteger(Number(limit)) || Number(limit) < 1) {
+				context.addIssue({
+					code: 'custom', path: ['BILLING_MAX_CHARGE_CENTS'], message: 'Use the Sandbox account charge limit in cents',
+				})
+			}
+		}
 		if (value.NODE_ENV === 'production') {
 			for (const key of ['STORAGE_ROOT', 'STORAGE_MAX_BYTES'] as const) {
 				if (value[key] === undefined)
@@ -114,6 +151,7 @@ const envSchema = z
 	.transform((value) => ({
 		...value,
 		SMTP_SECURE: value.SMTP_SECURE === undefined ? undefined : value.SMTP_SECURE === 'true',
+		BILLING_MAX_CHARGE_CENTS: value.BILLING_MODE === 'sandbox' ? Number(value.BILLING_MAX_CHARGE_CENTS) : undefined,
 		STORAGE_ROOT: value.STORAGE_ROOT ?? resolve(process.cwd(), '.data'),
 		STORAGE_MAX_BYTES: value.STORAGE_MAX_BYTES ?? 10737418240n,
 	}))

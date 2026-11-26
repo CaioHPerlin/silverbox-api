@@ -201,3 +201,24 @@ Restaure banco e diretório do mesmo conjunto, com a API parada, antes de reinic
 ## Oracle e CI/CD
 
 A configuração de produção e o fluxo de deploy ficam em [../deploy/README.md](../deploy/README.md). O Compose local acima continua independente da Oracle.
+
+## Pagamentos em Asaas Sandbox
+
+`GET /plans` publica Free, Pro, Team e Business. Use uma instância e um banco de homologação para habilitar os pagamentos.
+
+| Variável | Configuração |
+| --- | --- |
+| `BILLING_MODE` | `disabled` por padrão. Use `sandbox` na instância de homologação. |
+| `ASAAS_API_KEY` | Chave de uma conta Asaas Sandbox. |
+| `ASAAS_WEBHOOK_TOKEN` | Token dedicado de pelo menos 32 caracteres, distinto da chave. Configure o mesmo valor no painel Asaas. |
+| `BILLING_RETURN_ORIGIN` | Origem do frontend que serve `/planos`. Use a origem HTTPS de homologação ou `http://localhost:5173` com o túnel da API. |
+| `BILLING_PUBLIC_RETURN_ORIGIN` | Opcional. Quando o frontend roda em localhost, use a origem HTTPS do túnel da API, sem caminho. O Asaas envia o navegador para `/plans/return`, que redireciona para `/planos` no frontend local. |
+| `BILLING_MAX_CHARGE_CENTS` | Limite por cobrança verificado na conta Sandbox, em centavos. Por exemplo, `5000000` para um limite de R$ 50.000. |
+
+Aplique a migração Prisma e configure a URL HTTPS de homologação em `POST /webhooks/asaas`. Habilite os eventos de checkout e de ciclo de vida das cobranças, incluindo recebimento, vencimento, exclusão, estorno e disputa. A API persiste os eventos antes de responder e retoma os pendentes no próximo início do processo.
+
+Envie `planCode`, `cycle`, `seats` e `method` para `POST /plans/checkout` com o cookie de sessão e um `Idempotency-Key` por intenção. Na primeira compra Pix ou boleto, inclua `payerCpf`. O cartão é coletado pelo checkout hospedado. Acompanhe o estado por `GET /plans/purchases/:id`. O retorno do navegador serve para atualizar essa consulta. Para testar com o front local, configure `VITE_API_URL=http://localhost:8000`.
+
+Use a mesma chave após timeout. Para Pix ou boleto, a API procura a cobrança pela referência e recupera as instruções do mesmo ID. Para cartão, ela recupera o vínculo por evento do checkout ou pela cobrança associada. Uma criação inconclusiva sem evidência suficiente entra em `review`. Confira a referência de compra no painel Asaas antes de iniciar outra tentativa.
+
+A vigência do Pro começa na confirmação válida, com fim exclusivo e ajuste ao último dia de meses mais curtos. Compras simultaneamente vigentes usam a maior quota aplicável. Cada renovação é iniciada pelo usuário e tem sua própria vigência. Após expiração, estorno integral ou disputa, o arquivo continua acessível e a quota vigente volta a valer nas novas gravações. Estorno parcial segue para revisão e preserva eventual benefício já concedido. Team e Business permitem testar a cobrança em Sandbox. Os benefícios de equipe permanecem como proposta comercial.

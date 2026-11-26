@@ -29,6 +29,9 @@ model User {
   sharedLinks SharedLink[]
   avatar      Avatar?
   uploadReservations UploadReservation[]
+  billingCustomers BillingCustomer[]
+  billingPurchases BillingPurchase[]
+  billingGrants BillingGrant[]
 
   @@map("users")
   @@schema("silverbox_api")
@@ -217,5 +220,134 @@ model Avatar {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("avatars")
+  @@schema("silverbox_api")
+}
+
+enum BillingPlanCode {
+  pro
+  team
+  business
+
+  @@schema("silverbox_api")
+}
+
+enum BillingCycle {
+  month
+  year
+
+  @@schema("silverbox_api")
+}
+
+enum BillingMethod {
+  credit_card
+  pix
+  boleto
+
+  @@schema("silverbox_api")
+}
+
+enum BillingPurchaseStatus {
+  preparing
+  pending
+  processing
+  overdue
+  paid
+  expired
+  cancelled
+  refunded
+  disputed
+  review
+  failed
+
+  @@schema("silverbox_api")
+}
+
+model BillingCustomer {
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             Int
+  provider           String    @db.VarChar(16)
+  environment        String    @db.VarChar(16)
+  providerCustomerId String?   @db.VarChar(128)
+  submittedAt        DateTime? @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, provider, environment])
+  @@unique([provider, environment, providerCustomerId])
+  @@map("billing_customers")
+  @@schema("silverbox_api")
+}
+
+model BillingPurchase {
+  id                 String                @id @default(uuid()) @db.Uuid
+  userId             Int
+  provider           String                @db.VarChar(16)
+  environment        String                @db.VarChar(16)
+  idempotencyKey     String                @db.VarChar(128)
+  planCode           BillingPlanCode
+  cycle              BillingCycle
+  seats              Int
+  currency           String                @default("BRL") @db.VarChar(3)
+  unitAmountCents    Int
+  amountCents        Int
+  benefits           Json
+  method             BillingMethod
+  status             BillingPurchaseStatus @default(preparing)
+  providerCustomerId String?               @db.VarChar(128)
+  providerCheckoutId String?               @db.VarChar(128)
+  providerPaymentId  String?               @db.VarChar(128)
+  instructions       Json?
+  instructionsUntil  DateTime?             @db.Timestamptz(3)
+  submittedAt        DateTime?             @db.Timestamptz(3)
+  nextSyncAt         DateTime?             @db.Timestamptz(3)
+  confirmedAt        DateTime?             @db.Timestamptz(3)
+  lastError          String?               @db.VarChar(64)
+  revision           Int                   @default(0)
+  createdAt          DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime              @updatedAt @db.Timestamptz(3)
+
+  user  User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  grant BillingGrant?
+
+  @@unique([userId, provider, environment, idempotencyKey])
+  @@unique([provider, environment, providerCheckoutId])
+  @@unique([provider, environment, providerPaymentId])
+  @@index([nextSyncAt])
+  @@map("billing_purchases")
+  @@schema("silverbox_api")
+}
+
+model BillingGrant {
+  purchaseId   String    @id @db.Uuid
+  userId       Int
+  storageBytes BigInt
+  startsAt     DateTime  @db.Timestamptz(3)
+  endsAt       DateTime  @db.Timestamptz(3)
+  revokedAt    DateTime? @db.Timestamptz(3)
+
+  purchase BillingPurchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  user     User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, endsAt])
+  @@map("billing_grants")
+  @@schema("silverbox_api")
+}
+
+model BillingWebhookEvent {
+  provider      String    @db.VarChar(16)
+  environment   String    @db.VarChar(16)
+  id            String    @db.VarChar(160)
+  type          String    @db.VarChar(64)
+  resourceId    String?   @db.VarChar(128)
+  evidence      Json
+  attempts      Int       @default(0)
+  lastError     String?   @db.VarChar(64)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  nextAttemptAt DateTime  @default(now()) @db.Timestamptz(3)
+  processedAt   DateTime? @db.Timestamptz(3)
+
+  @@id([provider, environment, id])
+  @@index([processedAt, nextAttemptAt])
+  @@map("billing_webhook_events")
   @@schema("silverbox_api")
 }

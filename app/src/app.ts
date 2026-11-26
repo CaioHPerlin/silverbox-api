@@ -9,6 +9,9 @@ import { toNodeHandler } from 'better-auth/node'
 import { ZodError } from 'zod'
 
 import { swaggerSpec } from './config/swagger.js'
+import { env } from './config/env.js'
+import { billing } from './lib/billing/runtime.js'
+import { createPaymentRouters } from './routes/plans.js'
 import { auth } from './lib/auth.js'
 import { HttpError } from './lib/file-service.js'
 import { prisma } from './lib/prisma.js'
@@ -30,7 +33,7 @@ import {
   storageRouter,
 } from './routes/files.js'
 
-export function createApp(): Application {
+export function createApp(paymentService = billing): Application {
   const app = express()
 
   app.set('trust proxy', 1)
@@ -54,6 +57,12 @@ export function createApp(): Application {
 
   app.use('/api/auth/admin', nativeAdminRouter)
   app.all('/api/auth/*splat', toNodeHandler(auth))
+  const paymentRouters = createPaymentRouters(paymentService, [
+    new URL(env.BETTER_AUTH_URL).origin,
+    ...env.FRONTEND_ORIGINS,
+  ])
+  app.use('/plans', paymentRouters.plans)
+  app.use('/webhooks', paymentRouters.webhooks)
   app.use(express.json())
 
   app.use('/auth', authRouter)

@@ -1,5 +1,6 @@
 import swaggerJsdoc from 'swagger-jsdoc'
 import { env } from './env.js'
+import { billingPaths, billingSchemas } from './billing-swagger.js'
 
 type Schema = Record<string, unknown>
 const ref = (name: string): Schema => ({ $ref: `#/components/schemas/${name}` })
@@ -1154,13 +1155,14 @@ export const swaggerSpec = swaggerJsdoc({
 				'Entre por /auth/register ou /auth/login no Try it out para usar a sessão HttpOnly. Use o mesmo hostname em todas as chamadas. Uploads recebem bytes brutos, não multipart. Em HTTPS o cookie usa o prefixo __Secure-. O deploy permite CORS de origens HTTP(S), refletindo Origin com credenciais; isso não dispensa sessão nem autoriza acesso a arquivos de terceiros. Para desenvolver o front no localhost contra esta API, use o proxy /__api do Vite em silverbox-web; cookies SameSite=Lax não são enviados diretamente entre sites distintos. Origens de autenticação direta continuam configuradas em FRONTEND_ORIGINS.',
 		},
 		servers: [{ url: env.BETTER_AUTH_URL, description: 'Origem pública configurada' }],
-		tags: ['Auth', 'Admin', 'Folders', 'Files', 'Search', 'Shares', 'Storage', 'Health'].map(
+		tags: ['Auth', 'Admin', 'Folders', 'Files', 'Search', 'Shares', 'Storage', 'Health', 'Plans', 'Billing'].map(
 			(name) => ({
 				name,
 			}),
 		),
 		components: {
 			securitySchemes: {
+				asaasWebhookToken: { type: 'apiKey', in: 'header', name: 'asaas-access-token' },
 				sessionCookie: {
 					type: 'apiKey',
 					in: 'cookie',
@@ -1171,9 +1173,9 @@ export const swaggerSpec = swaggerJsdoc({
 						'Cookie HttpOnly obtido no cadastro/login; o navegador o envia automaticamente.',
 				},
 			},
-			schemas,
+			schemas: { ...schemas, ...billingSchemas },
 		},
-		paths,
+		paths: { ...paths, ...billingPaths },
 	},
 	apis: [],
 })

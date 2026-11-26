@@ -3,6 +3,7 @@ import { env } from './config/env.js'
 import { prisma } from './lib/prisma.js'
 import { storage } from './lib/storage.js'
 import { reconcileStorage } from './lib/file-service.js'
+import { startBillingWorker } from './lib/billing/runtime.js'
 import { acquireStorageLock } from './lib/storage-lock.js'
 
 async function bootstrap(): Promise<void> {
@@ -19,6 +20,7 @@ async function bootstrap(): Promise<void> {
 	}, 60_000)
 	reconciliation.unref()
 	const app = createApp()
+	const stopBillingWorker = startBillingWorker()
 
 	const server = app.listen(env.PORT, () => {
 		console.info(`[SERVER] Listening on http://localhost:${env.PORT}`)
@@ -34,8 +36,8 @@ async function bootstrap(): Promise<void> {
 				process.exit(1)
 			}
 
-			void prisma
-				.$disconnect()
+			void stopBillingWorker()
+				.finally(() => prisma.$disconnect())
 				.finally(() => releaseStorageLock().finally(() => process.exit(0)))
 		})
 	}

@@ -64,7 +64,11 @@ Deploy não integra automaticamente as telas de arquivos do web: várias ainda u
 
 4. Em uma janela sem sessão prévia no Silverbox, abra `/login` na web, clique em **Entre com o Google** e conclua o login com a conta de teste. Confirme o retorno a `/home` e recarregue a página. Na aba Rede do navegador, confira se `/api/auth/get-session` retorna uma sessão da conta usada. Registre o ambiente, a data e o resultado sem copiar cookies, códigos ou tokens.
 
+Para validar a criação de conta e sessão, use uma conta Google cujo e-mail ainda não esteja cadastrado no Silverbox. Se já houver cadastro por senha, o Better Auth exige que o e-mail local esteja verificado para tentar o vínculo automático. Um cadastro local com e-mail pendente de verificação pode retornar `account_not_linked` depois do consentimento.
+
 Em produção, se o botão estiver disponível, consulte `/auth/providers`. `{"google":false}` indica que a API está sem o provedor. Com `{"google":true}`, rode a mesma checagem com as origens públicas e confira o cadastro do callback abaixo no cliente OAuth de produção. O redirecionamento da API pode funcionar mesmo quando o Google rejeita o cliente ou o callback. O login no navegador confirma a troca do código e a criação da sessão.
+
+Para publicar o consentimento externo, preencha os links públicos da página inicial, da Política de Privacidade e dos Termos de Serviço na seção **Branding** do projeto Google. Confira o status em **Público-alvo** após salvar. [Requisitos de branding do Google](https://support.google.com/cloud/answer/15549049?hl=pt-BR)
 
 ## Domínios desta instância
 

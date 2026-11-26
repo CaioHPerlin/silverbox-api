@@ -1,19 +1,5 @@
-export const minPasswordLength = 15
+export const minPasswordLength = 8
 export const maxPasswordLength = 128
-
-const commonPasswords = new Set([
-	'0123456789012345',
-	'123456789012345',
-	'1234567890123456',
-	'987654321098765',
-	'administrador123',
-	'password123456789',
-	'passwordpassword',
-	'qwertyuiopasdfgh',
-	'qwertyuiopasdfghjkl',
-	'senha1234567890',
-	'silverbox123456',
-])
 
 export function newPasswordError(password: string) {
 	if (password.length > maxPasswordLength) {
@@ -22,12 +8,11 @@ export function newPasswordError(password: string) {
 	if (Array.from(password).length < minPasswordLength) {
 		return { code: 'PASSWORD_TOO_SHORT', message: `Use pelo menos ${minPasswordLength} caracteres.` }
 	}
-	const normalized = password.normalize('NFKC').trim().toLowerCase()
-	if (!normalized || commonPasswords.has(normalized) || /^(.)\1*$/su.test(normalized)) {
-		return {
-			code: 'PASSWORD_TOO_COMMON',
-			message: 'Essa senha é muito comum ou previsível. Escolha uma frase mais difícil de adivinhar.',
-		}
+	if (!/\p{Lu}/u.test(password)) {
+		return { code: 'PASSWORD_MISSING_UPPERCASE', message: 'Use pelo menos uma letra maiúscula.' }
+	}
+	if (!/[\p{P}\p{S}]/u.test(password)) {
+		return { code: 'PASSWORD_MISSING_SYMBOL', message: 'Use pelo menos um símbolo, como @, ! ou #.' }
 	}
 	return null
 }

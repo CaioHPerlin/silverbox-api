@@ -8,7 +8,7 @@ const ref = (name: string): Schema => ({ $ref: `#/components/schemas/${name}` })
 const str = (extra: Schema = {}): Schema => ({ type: 'string', ...extra })
 const newPassword = str({
 	format: 'password', minLength: minPasswordLength, maxLength: maxPasswordLength,
-	description: 'Senhas comuns ou previsíveis são recusadas.',
+	description: 'Use pelo menos uma letra maiúscula e um símbolo, como @, ! ou #.',
 })
 const integer = (extra: Schema = {}): Schema => ({ type: 'integer', ...extra })
 const date = str({ format: 'date-time' })

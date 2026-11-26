@@ -92,7 +92,7 @@ async function signup() {
 		body: JSON.stringify({
 			name: 'Storage test',
 			email: `${randomUUID()}@example.com`,
-			password: 'correct-horse-battery-staple',
+			password: 'Correct-horse-battery-staple',
 		}),
 	})
 	assert.equal(response.status, 200)
@@ -329,7 +329,7 @@ test('production requires explicit storage root and global budget', () => {
 test('admin contracts join accounts, storage operations, audit and metrics without changing ownership', async () => {
 	const f = await fixture()
 	const db = new pg.Client({ connectionString: f.environment.DATABASE_URL })
-	const password = 'correct-horse-battery-staple'
+	const password = 'Correct-horse-battery-staple'
 	const request = (path: string, cookie?: string, method = 'GET', body?: unknown) =>
 		fetch(baseURL + path, {
 			method,
@@ -348,10 +348,10 @@ test('admin contracts join accounts, storage operations, audit and metrics witho
 		const email = `admin-target-${randomUUID()}@example.com`
 		for (const path of ['/admin/users', '/api/auth/admin/create-user']) {
 			const rejected = await request(path, operator, 'POST', {
-				name: 'Pessoa de teste', email, password: 'passwordpassword',
+				name: 'Pessoa de teste', email, password: 'Teste123',
 			})
 			assert.equal(rejected.status, 400)
-			assert.equal((await rejected.json()).code, 'PASSWORD_TOO_COMMON')
+			assert.equal((await rejected.json()).code, 'PASSWORD_MISSING_SYMBOL')
 		}
 		const create = await request('/admin/users', operator, 'POST', {
 			name: '=Pessoa de teste',

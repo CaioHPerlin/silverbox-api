@@ -57,7 +57,7 @@ test('ARM64 production release becomes healthy and failed replacement restores p
         (async () => {
           const base='http://127.0.0.1:8000';
           assert.equal((await fetch(base+'/health/ready')).status,200);
-          const signup=await fetch(base+'/auth/register',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://web.silverbox.test'},body:JSON.stringify({name:'ARM Release',email:'release-'+Date.now()+'@example.com',password:'correct-horse-battery-staple'})});
+          const signup=await fetch(base+'/auth/register',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://web.silverbox.test'},body:JSON.stringify({name:'ARM Release',email:'release-'+Date.now()+'@example.com',password:'Correct-horse-battery-staple'})});
           assert.equal(signup.status,200);
           const cookie=signup.headers.getSetCookie().find(v=>v.includes('session_token')).split(';')[0];
           const upload=await fetch(base+'/files',{method:'POST',headers:{Origin:'https://web.silverbox.test',Cookie:cookie,'Content-Type':'application/octet-stream','X-File-Name':'arm.txt','X-File-Size':'5','X-File-Mime':'text/plain'},body:'hello'});

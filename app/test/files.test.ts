@@ -42,7 +42,7 @@ async function register(name: string) {
 	const response = await fetch(`${baseURL}/auth/register`, {
 		method: 'POST',
 		headers,
-		body: JSON.stringify({ name, email, password: 'correct-horse-battery-staple' }),
+		body: JSON.stringify({ name, email, password: 'Correct-horse-battery-staple' }),
 	})
 	assert.equal(response.status, 200)
 	const cookie = response.headers.get('set-cookie')?.split(';')[0]

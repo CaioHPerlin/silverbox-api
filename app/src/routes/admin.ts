@@ -85,19 +85,49 @@ adminRouter.get('/users', async (req, res) => {
 				],
 			}
 		: {}
-	const [users, total] = await prisma.$transaction(
-		[
-			prisma.user.findMany({
+	const result = await prisma.$transaction(
+		async (tx) => {
+			const users = await tx.user.findMany({
 				where,
 				select: adminUserFields,
 				orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
 				...pageResult(page, limit),
-			}),
-			prisma.user.count({ where }),
-		],
+			})
+			const total = await tx.user.count({ where })
+			if (users.length === 0) return { users: [], total, page, limit }
+
+			const ids = users.map((user) => user.id)
+			// Match /storage/usage: billed versions (including trash) plus avatar bytes.
+			// Reservations affect availability but are not committed usage.
+			const usage = await tx.$queryRaw<Array<{ userId: number; bytes: string }>>`
+				SELECT user_id AS "userId", SUM(bytes)::text AS bytes
+				FROM (
+					SELECT files.userid AS user_id, SUM(versions.sizebytes) AS bytes
+					FROM silverbox_api.files AS files
+					JOIN silverbox_api.file_versions AS versions ON versions.fileid = files.id
+					WHERE files.userid = ANY(${ids}::integer[])
+					GROUP BY files.userid
+					UNION ALL
+					SELECT user_id, size_bytes AS bytes
+					FROM silverbox_api.avatars
+					WHERE user_id = ANY(${ids}::integer[])
+				) AS account_usage
+				GROUP BY user_id
+			`
+			const byUser = new Map(usage.map(({ userId, bytes }) => [userId, bytes]))
+			return {
+				users: users.map((user) => ({
+					...adminUserJson(user),
+					usedBytes: byUser.get(user.id) ?? '0',
+				})),
+				total,
+				page,
+				limit,
+			}
+		},
 		{ isolationLevel: 'RepeatableRead' },
 	)
-	res.json({ users: users.map(adminUserJson), page, limit, total })
+	res.json(result)
 })
 
 async function registerUser(req: Request, actorId: number) {

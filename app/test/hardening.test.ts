@@ -373,10 +373,14 @@ test('admin contracts join accounts, storage operations, audit and metrics witho
 		assert.equal(page.total, 1)
 		assert.equal(page.users[0].id, String(target.id))
 		assert.equal(typeof page.users[0].quotaLimitBytes, 'string')
+		assert.equal(page.users[0].usedBytes, '0')
 
 		const sent = await upload(owner)
 		assert.equal(sent.status, 201, await sent.clone().text())
 		const file = (await sent.json()).file
+		const readUsed = async () =>
+			(await (await request(filter, operator)).json()).users[0].usedBytes
+		assert.equal(await readUsed(), '4')
 		const ownerFileRoute = `/files/${file.id}`
 		const adminFileRoute = `/admin/files/${file.id}`
 		assert.equal((await request(ownerFileRoute, operator)).status, 404)
@@ -414,6 +418,7 @@ test('admin contracts join accounts, storage operations, audit and metrics witho
 
 		assert.equal((await request(`${adminFileRoute}/permanent`, operator, 'DELETE')).status, 409)
 		assert.equal((await request(adminFileRoute, operator, 'DELETE')).status, 204)
+		assert.equal(await readUsed(), '4')
 		const trash = await (await request('/admin/files?trash=true', operator)).json()
 		assert.equal(trash.files[0].id, file.id)
 		const stats = await (await request('/admin/stats?days=7', operator)).json()
@@ -424,6 +429,7 @@ test('admin contracts join accounts, storage operations, audit and metrics witho
 		assert.equal(stats.traffic[0].uploadBytes, '0')
 		assert.equal((await request('/admin/stats', owner)).status, 403)
 		assert.equal((await request(`${adminFileRoute}/permanent`, operator, 'DELETE')).status, 204)
+		assert.equal(await readUsed(), '0')
 		assert.equal((await request('/shares', owner).then((r) => r.json())).shares.length, 0)
 
 		assert.equal((await upload(owner)).status, 201)

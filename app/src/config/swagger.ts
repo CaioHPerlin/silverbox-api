@@ -990,7 +990,23 @@ paths['/admin/users'] = {
 	get: op(
 		'Admin',
 		'Listar contas e cotas',
-		{ 200: response('Contas paginadas', paging('users', adminUser)) },
+		{
+			200: response(
+				'Contas paginadas com uso efetivo',
+				paging('users', {
+					allOf: [
+						adminUser,
+						object({
+							usedBytes: {
+								...decimalBytes,
+								description:
+									'Versões de arquivos e avatar, em bytes. Exclui reservas de upload.',
+							},
+						}),
+					],
+				}),
+			),
+		},
 		{ parameters: [...pagination, searchTerm] },
 	),
 	post: op(

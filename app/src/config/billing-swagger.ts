@@ -1,6 +1,6 @@
 import { checkoutReturnStatuses } from '../lib/billing/asaas.js'
 import { cycles, paidPlans, paymentMethods } from '../lib/billing/catalog.js'
-import { purchaseStatuses } from '../lib/billing/rules.js'
+import { asaasEnvironments, purchaseStatuses } from '../lib/billing/rules.js'
 
 type Schema = Record<string, unknown>
 const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` })
@@ -19,7 +19,7 @@ const currency = enumText(['BRL'])
 const nullableInteger = integer({ minimum: 0, nullable: true })
 const selection = { planCode: enumText(paidPlans), cycle: enumText(cycles), seats: integer({ minimum: 1, maximum: 100 }) }
 const selectionAndMethod = { ...selection, method: enumText(paymentMethods) }
-const purchaseProperties = { id: uuid, ...selectionAndMethod, currency, amountCents: cents, status: enumText(purchaseStatuses) }
+const purchaseProperties = { id: uuid, ...selectionAndMethod, currency, amountCents: cents, status: enumText(purchaseStatuses), environment: enumText(asaasEnvironments) }
 const checkoutExamples = {
 	proMonthly: { summary: 'Pro mensal por Pix', value: { planCode: 'pro', cycle: 'month', seats: 1, method: 'pix' } },
 	proYearly: { summary: 'Pro anual por cartão', value: { planCode: 'pro', cycle: 'year', seats: 1, method: 'credit_card' } },
@@ -41,10 +41,11 @@ export const billingSchemas = {
 		'perSeat', 'seatMin', 'seatMax', 'checkoutEnabled', 'storageBytes', 'egressBytes', 'maxFileBytes',
 		'versionDays', 'trashDays', 'highlights',
 	]),
-	PlanCatalog: object({ currency, paymentMethods: array(enumText(paymentMethods)), plans: array(ref('PricingPlan')) }),
+	PlanCatalog: object({ currency, billingMode: enumText(['disabled', ...asaasEnvironments]), paymentMethods: array(enumText(paymentMethods)), plans: array(ref('PricingPlan')) }),
 	PlanCheckout: {
 		...object({
 			...selectionAndMethod,
+			billingEnvironment: { ...enumText(asaasEnvironments), description: 'Obrigatório com production para gerar uma cobrança real.' },
 			payerCpf: text({
 				pattern: '^(?:[0-9]{11}|[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}-[0-9]{2})$',
 				description: 'CPF do primeiro pagador de Pix ou boleto.',
@@ -92,7 +93,7 @@ export const billingPaths = {
 	'/plans/checkout': {
 		post: {
 			tags: ['Plans'], summary: 'Cria ou recupera uma compra avulsa', security: session,
-			description: 'O checkout opera em Asaas Sandbox. Calcula o valor integral do ciclo em centavos e aplica a quantidade de pessoas. Na primeira compra por Pix ou boleto, adicione payerCpf ao exemplo.',
+			description: 'O ambiente configurado na API determina se a cobrança é simulada ou real. O checkout cobra o valor integral do ciclo por pessoa. Na primeira compra por Pix ou boleto, adicione payerCpf ao exemplo.',
 			parameters: [{
 				in: 'header', name: 'Idempotency-Key', required: true,
 				description: 'Reutilize a mesma chave em todas as tentativas da mesma compra.',
@@ -108,8 +109,8 @@ export const billingPaths = {
 				201: success('Compra criada com instruções de pagamento.'),
 				202: success('Compra em preparação ou conciliação. Consulte o estado pelo ID.'),
 				403: problem('Origem não autorizada para cobrança.'),
-				409: problem('Chave de idempotência já associada a outra seleção.'),
-				422: problem('Limite de valor excedido ou cadastro do pagador recusado.'),
+				409: problem('Ambiente de cobrança divergente ou chave de idempotência já associada a outra seleção.'),
+				422: problem('Plano indisponível, limite de valor excedido ou cadastro do pagador recusado.'),
 			},
 		},
 	},

@@ -1,3 +1,5 @@
+import type { BillingMode } from './rules.js'
+
 export const paidPlans = ['pro', 'team', 'business'] as const
 export const paymentMethods = ['credit_card', 'pix', 'boleto'] as const
 export const cycles = ['month', 'year'] as const
@@ -28,6 +30,15 @@ export interface PricingPlan {
 
 const GiB = 1024 ** 3
 const TiB = 1024 ** 4
+export const proStorageBytes = 200 * GiB
+
+export function grantsStorage(planCode: PlanCode) {
+	return planCode === 'pro'
+}
+
+export function isCheckoutEnabled(planCode: PlanCode, mode: BillingMode) {
+	return mode === 'sandbox' ? planCode !== 'free' : mode === 'production' && grantsStorage(planCode)
+}
 
 // Valores e recursos publicados em feature/pagina-vendas.
 const plans: PricingPlan[] = [
@@ -43,7 +54,7 @@ const plans: PricingPlan[] = [
 		code: 'pro', name: 'Pro', audience: 'Para uso pessoal',
 		description: 'Uma proposta de mais espaço para o seu dia a dia.',
 		status: 'coming-soon', monthlyPriceCents: 2990, yearlyPriceCents: 29900,
-		perSeat: false, seatMin: 1, seatMax: 1, featured: true, storageBytes: 200 * GiB,
+		perSeat: false, seatMin: 1, seatMax: 1, featured: true, storageBytes: proStorageBytes,
 		egressBytes: 500 * GiB, maxFileBytes: 5 * GiB, versionDays: 30, trashDays: 30,
 		highlights: ['200 GiB de armazenamento previstos', '500 GiB de downloads por ciclo previstos', 'Histórico de versões por 30 dias previsto'],
 	},
@@ -65,14 +76,23 @@ const plans: PricingPlan[] = [
 	},
 ]
 
-export function pricingCatalog(sandboxEnabled: boolean) {
+export function pricingCatalog(billingMode: BillingMode, maxUploadBytes: number) {
 	return {
 		currency: 'BRL',
+		billingMode,
 		paymentMethods,
-		plans: plans.map((plan) => ({
-			...plan,
-			checkoutEnabled: plan.code !== 'free' && sandboxEnabled,
-		})),
+		plans: plans.map((plan) => {
+			const checkoutEnabled = isCheckoutEnabled(plan.code, billingMode)
+			if (billingMode === 'production' && checkoutEnabled) {
+				return {
+					...plan, checkoutEnabled, status: 'available',
+					description: 'Mais espaço para guardar e organizar os seus arquivos.',
+					maxFileBytes: maxUploadBytes, egressBytes: null, versionDays: null, trashDays: null,
+					highlights: ['200 GiB de armazenamento', 'Compartilhamento por link'],
+				}
+			}
+			return { ...plan, checkoutEnabled }
+		}),
 	}
 }
 

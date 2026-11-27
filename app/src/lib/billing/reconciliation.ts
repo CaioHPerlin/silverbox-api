@@ -1,5 +1,6 @@
 import type { BillingPurchase, Prisma, PrismaClient } from '@prisma/client'
 import type { AsaasGateway, AsaasPayment } from './asaas.js'
+import { grantsStorage } from './catalog.js'
 import { asaasCents, asaasDate, asaasMethods, isPayable, paymentStatus, periodEnd } from './rules.js'
 
 export class ReconciliationError extends Error {
@@ -16,7 +17,8 @@ export async function transition(
 	grant: 'activate' | 'revoke' | 'preserve' = 'preserve',
 ) {
 	await db.$transaction(async (tx) => {
-		if (purchase.planCode === 'pro' && grant !== 'preserve') {
+		const includesStorageGrant = grantsStorage(purchase.planCode)
+		if (includesStorageGrant && grant !== 'preserve') {
 			// Same lock order as file-service reserve and upload commit.
 			await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(714923, 1)`
 			await tx.$queryRaw`SELECT id FROM silverbox_api.users WHERE id = ${purchase.userId} FOR UPDATE`
@@ -26,7 +28,7 @@ export async function transition(
 			data: { ...data, revision: { increment: 1 } },
 		})
 		if (result.count !== 1) throw new ReconciliationError('concurrent_update')
-		if (purchase.planCode !== 'pro') return
+		if (!includesStorageGrant) return
 		if (grant === 'activate') {
 			const snapshot = purchase.benefits as { storageBytes: number }
 			const startsAt = data.confirmedAt as Date

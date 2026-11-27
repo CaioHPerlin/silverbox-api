@@ -1,6 +1,9 @@
 import type { Cycle, PaymentMethod } from './catalog.js'
 
-export const asaasScope = { provider: 'asaas', environment: 'sandbox' } as const
+export const asaasEnvironments = ['sandbox', 'production'] as const
+export type AsaasEnvironment = (typeof asaasEnvironments)[number]
+export type BillingMode = 'disabled' | AsaasEnvironment
+export const asaasProvider = 'asaas'
 export const checkoutMinutes = 30
 export const asaasMethods = { credit_card: 'CREDIT_CARD', pix: 'PIX', boleto: 'BOLETO' } as const
 export const purchaseStatuses = [

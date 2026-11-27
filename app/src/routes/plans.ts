@@ -1,5 +1,6 @@
 import { Router, json, type ErrorRequestHandler } from 'express'
 import { ZodError } from 'zod'
+import { env } from '../config/env.js'
 import { checkoutReturnStatuses, checkoutReturnUrl, publicCheckoutReturnPath } from '../lib/billing/asaas.js'
 import { pricingCatalog } from '../lib/billing/catalog.js'
 import type { BillingService } from '../lib/billing/service.js'
@@ -33,7 +34,7 @@ export function createPaymentRouters(service: BillingService, allowedOrigins: re
 
 	plans.get('/', (_req, res) => {
 		res.setHeader('Cache-Control', 'public, max-age=60')
-		res.json(pricingCatalog(Boolean(service.gateway)))
+		res.json(pricingCatalog(service.mode, env.MAX_UPLOAD_BYTES))
 	})
 	plans.get(publicCheckoutReturnPath, (req, res) => {
 		const origin = service.checkoutReturnFrontendOrigin

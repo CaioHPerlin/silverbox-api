@@ -7,6 +7,7 @@ import { storage } from './storage.js'
 import { env } from '../config/env.js'
 import { HttpError } from './errors.js'
 import { audit } from './audit.js'
+import { asaasProvider } from './billing/rules.js'
 export { HttpError } from './errors.js'
 
 type Transaction = Prisma.TransactionClient
@@ -43,11 +44,14 @@ export async function usage(userId: number, tx: Transaction | typeof prisma = pr
 		tx.fileVersion.aggregate({ where: { file: { userId } }, _sum: { sizeBytes: true } }),
 		tx.uploadReservation.aggregate({ where: { userId }, _sum: { sizeBytes: true } }),
 		tx.avatar.findUnique({ where: { userId }, select: { sizeBytes: true } }),
-		env.BILLING_MODE === 'sandbox' ? tx.billingGrant.findFirst({
-			where: { userId, startsAt: { lte: now }, endsAt: { gt: now }, revokedAt: null },
+		tx.billingGrant.findFirst({
+			where: {
+				userId, startsAt: { lte: now }, endsAt: { gt: now }, revokedAt: null,
+				purchase: { provider: asaasProvider, environment: env.BILLING_MODE === 'sandbox' ? 'sandbox' : 'production' },
+			},
 			orderBy: { storageBytes: 'desc' },
 			select: { storageBytes: true },
-		}) : null,
+		}),
 	])
 	if (!user) throw new HttpError(401, 'User not found')
 	const used = (versions._sum.sizeBytes ?? 0n) + (avatar?.sizeBytes ?? 0n)

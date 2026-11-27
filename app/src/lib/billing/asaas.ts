@@ -1,8 +1,10 @@
 import { z } from 'zod'
-import { asaasDate, asaasMethods, checkoutMinutes, type PaymentInstructions } from './rules.js'
+import { asaasDate, asaasMethods, checkoutMinutes, type AsaasEnvironment, type PaymentInstructions } from './rules.js'
 
-const baseUrl = 'https://api-sandbox.asaas.com/v3'
-const sandboxOrigin = 'https://sandbox.asaas.com'
+const endpoints = {
+	sandbox: { api: 'https://api-sandbox.asaas.com/v3', public: ['https://sandbox.asaas.com'] },
+	production: { api: 'https://api.asaas.com/v3', public: ['https://asaas.com', 'https://www.asaas.com'] },
+} as const
 export const providerId = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/)
 const optionalText = z.string().max(200).nullish()
 const providerStatus = z.string().regex(/^[A-Z0-9_]{1,64}$/)
@@ -45,22 +47,26 @@ export class AsaasError extends Error {
 	}
 }
 
-function sandboxUrl(value: string, path: RegExp): string {
+function publicPaymentUrl(value: string, origins: readonly string[], path: RegExp): URL {
 	let url: URL
 	try {
 		url = new URL(value)
 	} catch {
 		throw new AsaasError('invalid_response')
 	}
-	if (url.origin !== sandboxOrigin || url.username || url.password || !path.test(url.pathname)) {
+	if (!origins.includes(url.origin) || url.username || url.password || !path.test(url.pathname)) {
 		throw new AsaasError('invalid_response')
 	}
-	return url.href
+	return url
 }
 
-export function checkoutUrl(id: string, link?: string | null): string {
-	const pathPattern = /^\/(?:\d+\/)?checkoutSession\/show(?:\/([A-Za-z0-9_-]+))?$/
-	const url = new URL(sandboxUrl(link ?? `${sandboxOrigin}/checkoutSession/show/${encodeURIComponent(id)}`, pathPattern))
+export function checkoutUrl(environment: AsaasEnvironment, id: string, link?: string | null): string {
+	const origins = endpoints[environment].public
+	const fallback = environment === 'production'
+		? `${origins[0]}/checkoutSession/show?id=${encodeURIComponent(id)}`
+		: `${origins[0]}/checkoutSession/show/${encodeURIComponent(id)}`
+	const pathPattern = /^\/(?:[A-Za-z0-9_-]+\/)?checkoutSession\/show(?:\/([A-Za-z0-9_-]+))?$/
+	const url = publicPaymentUrl(link ?? fallback, origins, pathPattern)
 	const pathId = pathPattern.exec(url.pathname)?.[1]
 	const queryIds = url.searchParams.getAll('id')
 	if ((pathId ?? queryIds[0]) !== id || queryIds.some((queryId) => queryId !== id)) {
@@ -86,6 +92,7 @@ function paymentDateInBrazil(days: number): string {
 
 export class AsaasGateway {
 	constructor(
+		private readonly environment: AsaasEnvironment,
 		private readonly apiKey: string,
 		private readonly returnOrigin: string,
 		private readonly fetcher: typeof fetch = globalThis.fetch,
@@ -105,7 +112,7 @@ export class AsaasGateway {
 	private async request<T>(path: string, schema: z.ZodType<T>, body?: object): Promise<T> {
 		let response: Response
 		try {
-			response = await this.fetcher(baseUrl + path, {
+			response = await this.fetcher(endpoints[this.environment].api + path, {
 				method: body ? 'POST' : 'GET',
 				headers: {
 					accept: 'application/json',
@@ -198,10 +205,10 @@ export class AsaasGateway {
 			return { qrCodeBase64: qr.encodedImage, copyPaste: qr.payload, expiresAt: expiration.toISOString() }
 		}
 		if (!payment.bankSlipUrl || !payment.dueDate) throw new AsaasError('invalid_response')
-		const url = sandboxUrl(payment.bankSlipUrl, /^\/b\/pdf\/[A-Za-z0-9_-]+\/?$/)
+		const url = publicPaymentUrl(payment.bankSlipUrl, endpoints[this.environment].public, /^\/(?:[A-Za-z0-9_-]+\/)?b\/pdf\/[A-Za-z0-9_-]+\/?$/)
 		const slip = await this.request(`${path}/identificationField`, z.object({
 			identificationField: z.string().min(30).max(80).regex(/^[0-9. -]+$/),
 		}))
-		return { url, digitableLine: slip.identificationField, dueDate: payment.dueDate }
+		return { url: url.href, digitableLine: slip.identificationField, dueDate: payment.dueDate }
 	}
 }

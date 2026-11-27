@@ -8,7 +8,7 @@ import { checkoutSchema } from '../src/lib/billing/validation.js'
 import type { BillingPurchase, PrismaClient } from '@prisma/client'
 
 test('pricing preserves availability and uses whole-cycle cents per seat', () => {
-	const catalog = pricingCatalog(true)
+	const catalog = pricingCatalog('sandbox', 1024 ** 3)
 	assert.deepEqual(catalog.paymentMethods, ['credit_card', 'pix', 'boleto'])
 	assert.deepEqual(catalog.plans.map(({ code, status, checkoutEnabled, storageBytes }) => ({
 		code, status, checkoutEnabled, storageBytes,
@@ -18,7 +18,11 @@ test('pricing preserves availability and uses whole-cycle cents per seat', () =>
 		{ code: 'team', status: 'coming-soon', checkoutEnabled: true, storageBytes: 2 * 1024 ** 4 },
 		{ code: 'business', status: 'coming-soon', checkoutEnabled: true, storageBytes: 5 * 1024 ** 4 },
 	])
-	assert.ok(pricingCatalog(false).plans.every((plan) => !plan.checkoutEnabled))
+	assert.ok(pricingCatalog('disabled', 1024 ** 3).plans.every((plan) => !plan.checkoutEnabled))
+	const production = pricingCatalog('production', 1024 ** 3)
+	assert.equal(production.billingMode, 'production')
+	assert.deepEqual(production.plans.filter((plan) => plan.checkoutEnabled).map((plan) => plan.code), ['pro'])
+	assert.equal(production.plans.find((plan) => plan.code === 'pro')?.maxFileBytes, 1024 ** 3)
 	assert.deepEqual(catalog.plans.map(({ code, monthlyPriceCents, yearlyPriceCents, seatMin }) => [
 		code, monthlyPriceCents, yearlyPriceCents, seatMin,
 	]), [
@@ -75,7 +79,7 @@ test('provider states distinguish authorization, Pix clearance, boleto and rever
 
 test('Asaas sends detached hosted card requests to Sandbox and validates checkout URLs', async () => {
 	const id = '92f0950a-1536-46be-80a7-0b4398938565'
-	const gateway = new AsaasGateway('fake-access-token', 'https://test.silverbox.example', async (url, request) => {
+	const gateway = new AsaasGateway('sandbox', 'fake-access-token', 'https://test.silverbox.example', async (url, request) => {
 		assert.equal(url, 'https://api-sandbox.asaas.com/v3/checkouts')
 		assert.equal(request?.redirect, 'error')
 		assert.ok(request?.signal)
@@ -89,17 +93,20 @@ test('Asaas sends detached hosted card requests to Sandbox and validates checkou
 		return Response.json({ id: 'sandbox_session' })
 	})
 	const { id: checkoutId } = await gateway.createCheckout({ id, planCode: 'team', cycle: 'year', seats: 3, unitAmountCents: 49900 })
-	assert.equal(checkoutUrl(checkoutId), 'https://sandbox.asaas.com/checkoutSession/show/sandbox_session')
+	assert.equal(checkoutUrl('sandbox', checkoutId), 'https://sandbox.asaas.com/checkoutSession/show/sandbox_session')
 	const sandboxLink = 'https://sandbox.asaas.com/000/checkoutSession/show/sandbox_session'
-	assert.equal(checkoutUrl(checkoutId, sandboxLink), sandboxLink)
-	assert.throws(() => checkoutUrl(checkoutId, 'https://asaas.com/checkoutSession/show?id=sandbox_session'), AsaasError)
-	assert.throws(() => checkoutUrl(checkoutId, 'https://sandbox.asaas.com/checkoutSession/show/another-session'), AsaasError)
-	assert.throws(() => checkoutUrl(checkoutId, `${sandboxLink}?id=another-session`), AsaasError)
+	assert.equal(checkoutUrl('sandbox', checkoutId, sandboxLink), sandboxLink)
+	assert.throws(() => checkoutUrl('sandbox', checkoutId, 'https://asaas.com/checkoutSession/show?id=sandbox_session'), AsaasError)
+	assert.throws(() => checkoutUrl('sandbox', checkoutId, 'https://sandbox.asaas.com/checkoutSession/show/another-session'), AsaasError)
+	assert.throws(() => checkoutUrl('sandbox', checkoutId, `${sandboxLink}?id=another-session`), AsaasError)
+	assert.equal(checkoutUrl('production', checkoutId), 'https://asaas.com/checkoutSession/show?id=sandbox_session')
+	assert.equal(checkoutUrl('production', checkoutId, 'https://www.asaas.com/000/checkoutSession/show/sandbox_session'), 'https://www.asaas.com/000/checkoutSession/show/sandbox_session')
+	assert.throws(() => checkoutUrl('production', checkoutId, sandboxLink), AsaasError)
 })
 
 test('Asaas adapter validates Pix expiration, boleto instructions and duplicate references', async () => {
 	const payment = { id: 'pay_test', customer: 'cus_test', billingType: 'PIX', status: 'PENDING', value: 29.9 }
-	const gateway = new AsaasGateway('fake-access-token', 'http://localhost:5173', async (input) => {
+	const gateway = new AsaasGateway('sandbox', 'fake-access-token', 'http://localhost:5173', async (input) => {
 		const url = new URL(String(input))
 		if (url.pathname.endsWith('/pixQrCode')) {
 			return Response.json({ encodedImage: 'cWlk', payload: 'pix-payload', expirationDate: '2028-01-20 23:59:59' })
@@ -213,6 +220,7 @@ test('concurrent replays after a lost Checkout response reserve a single externa
 		},
 	} as unknown as PrismaClient
 	const service = new BillingService(db, {
+		environment: 'sandbox',
 		apiKey: 'fake-key', webhookToken: 'fake-dedicated-token', returnOrigin: 'http://localhost:5173', maxChargeCents: 5_000_000,
 	}, async (url, options) => {
 		if (options?.method === 'POST') {

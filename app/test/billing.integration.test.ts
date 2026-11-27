@@ -9,6 +9,7 @@ import { assertOperationsCovered, validateHttpContracts } from './contracts.js'
 
 const secret = 'sandbox-mock-webhook-token-test-only'
 const config = {
+	environment: 'sandbox' as const,
 	apiKey: 'sandbox-mock-key', webhookToken: secret, returnOrigin: 'http://localhost:5173', maxChargeCents: 5_000_000,
 	publicReturnOrigin: 'https://sandbox-api.silverbox.example',
 }
@@ -26,7 +27,10 @@ type MockPayment = {
 	canBePaidAfterDueDate?: boolean
 }
 
-function mockAsaas() {
+function mockAsaas(credentials: { environment: 'sandbox' | 'production'; apiKey: string }) {
+	const production = credentials.environment === 'production'
+	const apiOrigin = production ? 'https://api.asaas.com' : 'https://api-sandbox.asaas.com'
+	const publicOrigin = production ? 'https://www.asaas.com' : 'https://sandbox.asaas.com'
 	const customers = new Map<string, { id: string; externalReference: string }>()
 	const payments = new Map<string, MockPayment>()
 	const checkouts = new Map<string, {
@@ -37,8 +41,8 @@ function mockAsaas() {
 	const failures = { losePayment: false, loseCheckout: false, failInstructions: false, failQuery: false }
 	const fetcher: typeof fetch = async (input, options) => {
 		const url = new URL(String(input))
-		assert.equal(url.origin, 'https://api-sandbox.asaas.com')
-		assert.equal(new Headers(options?.headers).get('access_token'), config.apiKey)
+		assert.equal(url.origin, apiOrigin)
+		assert.equal(new Headers(options?.headers).get('access_token'), credentials.apiKey)
 		const [, version, resource, id, detail] = url.pathname.split('/')
 		assert.equal(version, 'v3')
 		if (options?.method === 'POST') {
@@ -53,7 +57,7 @@ function mockAsaas() {
 				assert.deepEqual(request.billingTypes, ['CREDIT_CARD'])
 				assert.deepEqual(request.chargeTypes, ['DETACHED'])
 				const id = randomUUID()
-				const checkout = { ...request, id, link: `https://sandbox.asaas.com/000/checkoutSession/show/${id}` }
+				const checkout = { ...request, id, link: `${publicOrigin}/000/checkoutSession/show/${id}` }
 				checkouts.set(checkout.id, checkout)
 				if (failures.loseCheckout) {
 					failures.loseCheckout = false
@@ -68,7 +72,7 @@ function mockAsaas() {
 				id: `pay_${randomUUID()}`,
 				status: 'PENDING',
 			}
-			if (payment.billingType === 'BOLETO') payment.bankSlipUrl = `https://sandbox.asaas.com/b/pdf/${payment.id}`
+			if (payment.billingType === 'BOLETO') payment.bankSlipUrl = `${publicOrigin}/000/b/pdf/${payment.id}`
 			payments.set(payment.id, payment)
 			if (failures.losePayment) {
 				failures.losePayment = false
@@ -103,7 +107,7 @@ function mockAsaas() {
 	return { customers, payments, checkouts, failures, fetcher }
 }
 
-test('Sandbox purchases, webhook recovery and storage integrate with PostgreSQL', {
+test('Asaas purchases, webhook recovery and isolated billing environments integrate with PostgreSQL', {
 	skip: !process.env.DATABASE_URL,
 }, async () => {
 	const root = await mkdtemp(join(tmpdir(), 'silverbox-billing-'))
@@ -117,7 +121,7 @@ test('Sandbox purchases, webhook recovery and storage integrate with PostgreSQL'
 		import('../src/app.js'), import('../src/config/env.js'), import('../src/lib/prisma.js'),
 		import('../src/lib/storage.js'), import('../src/lib/billing/service.js'),
 	])
-	const mock = mockAsaas()
+	const mock = mockAsaas(config)
 	let service = new BillingService(prisma, config, mock.fetcher)
 	await storage.init()
 	const server = createApp(service).listen(0, '127.0.0.1')
@@ -334,6 +338,62 @@ test('Sandbox purchases, webhook recovery and storage integrate with PostgreSQL'
 			assert.equal(charge?.value, expectedCents / 100)
 		}
 		assertOperationsCovered(['GET /plans', 'POST /plans/checkout', 'GET /plans/purchases/{id}', 'GET /plans/return', 'POST /webhooks/asaas'])
+
+		const productionConfig = {
+			environment: 'production' as const, apiKey: 'production-mock-key', webhookToken: 'production-mock-webhook-token-test-only',
+			returnOrigin: 'https://silverbox.example', maxChargeCents: config.maxChargeCents,
+		}
+		const productionMock = mockAsaas(productionConfig)
+		const production = new BillingService(prisma, productionConfig, productionMock.fetcher)
+		const productionCard = { planCode: 'pro', cycle: 'month', seats: 1, method: 'credit_card' } as const
+		await assert.rejects(production.start(ownerId, key, productionCard), { status: 409 })
+		await assert.rejects(production.start(ownerId, key, { ...productionCard, billingEnvironment: 'sandbox' }), { status: 409 })
+		await assert.rejects(production.start(ownerId, key, {
+			...productionCard, planCode: 'team', seats: 3, billingEnvironment: 'production',
+		}), { status: 422 })
+		assert.equal(productionMock.checkouts.size, 0)
+		assert.throws(() => production.verifyWebhook(secret), { status: 401 })
+		assert.doesNotThrow(() => production.verifyWebhook(productionConfig.webhookToken))
+		assert.equal(production.mode, 'production')
+
+		const started = await production.start(ownerId, key, { ...productionCard, billingEnvironment: 'production' })
+		assert.equal(started.status, 201)
+		assert.equal(started.body.environment, 'production')
+		assert.notEqual(started.body.id, purchase.id)
+		const liveCheckout = [...productionMock.checkouts.values()][0]!
+		assert.equal(liveCheckout.callback.successUrl, `${productionConfig.returnOrigin}/planos?purchaseId=${started.body.id}&checkout=success`)
+		assert.deepEqual(started.body.paymentInstructions, { url: liveCheckout.link })
+		await assert.rejects(production.getPurchase(ownerId, purchase.id), { status: 404 })
+		await assert.rejects(service.getPurchase(ownerId, started.body.id), { status: 404 })
+		const livePayment = {
+			id: cardPayment.id, checkoutSession: liveCheckout.id, billingType: 'CREDIT_CARD', value: 29.9, status: 'CONFIRMED',
+		}
+		productionMock.payments.set(livePayment.id, livePayment)
+		await production.saveEvent({ id: webhookId, event: 'CHECKOUT_PAID', checkout: { id: liveCheckout.id } })
+		await production.runOnce()
+		assert.equal((await production.getPurchase(ownerId, started.body.id)).status, 'paid')
+		assert.equal((await service.getPurchase(ownerId, card.id)).status, 'disputed')
+		assert.equal(await quota(), '1073741824')
+		env.BILLING_MODE = 'production'
+		try {
+			assert.equal(await quota(), '214748364800')
+			env.BILLING_MODE = 'disabled'
+			assert.equal(await quota(), '214748364800')
+			assert.equal((await disabled.getPurchase(ownerId, started.body.id)).status, 'paid')
+		} finally {
+			env.BILLING_MODE = 'sandbox'
+		}
+
+		const livePix = await production.start(ownerId, randomUUID(), {
+			...productionCard, method: 'pix', billingEnvironment: 'production', payerCpf: '52998224725',
+		})
+		assert.equal(livePix.status, 201)
+		assert.match(JSON.stringify(livePix.body.paymentInstructions), /mock-pix-payload/)
+		const liveSlip = await production.start(ownerId, randomUUID(), {
+			...productionCard, method: 'boleto', billingEnvironment: 'production',
+		})
+		assert.equal(liveSlip.status, 201)
+		assert.ok(JSON.stringify(liveSlip.body.paymentInstructions).includes('https://www.asaas.com/000/b/pdf/'))
 
 		await prisma.user.update({ where: { id: other.id }, data: { userRole: 'admin' } })
 		const deletion = await fetch(`${baseURL}/admin/users/${ownerId}`, {

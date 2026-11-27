@@ -3,12 +3,19 @@ import type { BillingPurchase, BillingWebhookEvent, PrismaClient } from '@prisma
 import { z } from 'zod'
 import { HttpError } from '../errors.js'
 import { AsaasError, AsaasGateway, checkoutReturnUrl, checkoutUrl, providerId, type AsaasPayment } from './asaas.js'
-import { priceSelection } from './catalog.js'
+import { isCheckoutEnabled, priceSelection } from './catalog.js'
 import { applyPayment, markReview, ReconciliationError, storeInstructions, transition } from './reconciliation.js'
-import { asaasCents, asaasScope, checkoutMinutes, isPayable } from './rules.js'
+import { asaasCents, asaasProvider, checkoutMinutes, isPayable, type AsaasEnvironment, type BillingMode } from './rules.js'
 import { purchaseIdSchema, type CheckoutSelection } from './validation.js'
 
-type SandboxConfig = { apiKey: string; webhookToken: string; returnOrigin: string; publicReturnOrigin?: string; maxChargeCents: number }
+type BillingConfig = {
+	environment: AsaasEnvironment
+	apiKey: string
+	webhookToken: string
+	returnOrigin: string
+	publicReturnOrigin?: string
+	maxChargeCents: number
+}
 const checkoutEvents = {
 	CHECKOUT_CREATED: 'pending',
 	CHECKOUT_CANCELED: 'cancelled',
@@ -44,11 +51,11 @@ const checkoutEvidence = z.object({
 })
 
 function view(purchase: BillingPurchase) {
-	const { id, planCode, cycle, seats, currency, amountCents, method } = purchase
+	const { id, planCode, cycle, seats, currency, amountCents, method, environment } = purchase
 	const elapsed = purchase.instructionsUntil && purchase.instructionsUntil <= new Date()
 	const status = elapsed && isPayable(purchase.status) && method !== 'boleto' ? 'expired' : purchase.status
 	return {
-		id, planCode, cycle, seats, currency, amountCents, method, status,
+		id, planCode, cycle, seats, currency, amountCents, method, status, environment,
 		...(isPayable(status) && purchase.instructions && !elapsed ? { paymentInstructions: purchase.instructions } : {}),
 	}
 }
@@ -70,10 +77,18 @@ export class BillingService {
 
 	constructor(
 		private readonly db: PrismaClient,
-		private readonly config?: SandboxConfig,
+		private readonly config?: BillingConfig,
 		fetcher?: typeof fetch,
 	) {
-		if (config) this.gateway = new AsaasGateway(config.apiKey, config.returnOrigin, fetcher, config.publicReturnOrigin)
+		if (config) this.gateway = new AsaasGateway(config.environment, config.apiKey, config.returnOrigin, fetcher, config.publicReturnOrigin)
+	}
+
+	get mode(): BillingMode {
+		return this.config?.environment ?? 'disabled'
+	}
+
+	private get scope() {
+		return { provider: asaasProvider, environment: this.config?.environment ?? 'sandbox' }
 	}
 
 	get checkoutReturnFrontendOrigin() {
@@ -85,11 +100,13 @@ export class BillingService {
 	}
 
 	private customer(userId: number) {
-		return this.db.billingCustomer.findUnique({ where: { userId_provider_environment: { userId, ...asaasScope } } })
+		return this.db.billingCustomer.findUnique({ where: { userId_provider_environment: { userId, ...this.scope } } })
 	}
 
 	async getPurchase(userId: number, id: string) {
-		const purchase = await this.db.billingPurchase.findFirst({ where: { id, userId, ...asaasScope } })
+		const purchase = await this.db.billingPurchase.findFirst({
+			where: { id, userId, ...(this.config ? this.scope : { provider: asaasProvider }) },
+		})
 		if (!purchase) throw new HttpError(404, 'Compra não encontrada.')
 		return view(purchase)
 	}
@@ -99,13 +116,17 @@ export class BillingService {
 		if (!snapshot) throw new HttpError(400, 'Quantidade de pessoas inválida para o plano.')
 		const gateway = this.gateway
 		if (!this.config || !gateway) throw new HttpError(503, 'Checkout temporariamente indisponível.')
+		if (!isCheckoutEnabled(input.planCode, this.mode)) throw new HttpError(422, 'Este plano ainda não está disponível para contratação.')
+		if ((this.mode === 'production' || input.billingEnvironment) && input.billingEnvironment !== this.mode) {
+			throw new HttpError(409, 'O ambiente de pagamento mudou. Recarregue a página de planos e tente novamente.')
+		}
 
-		const where = { userId_provider_environment_idempotencyKey: { userId, ...asaasScope, idempotencyKey: key } }
+		const where = { userId_provider_environment_idempotencyKey: { userId, ...this.scope, idempotencyKey: key } }
 		let purchase = await this.db.billingPurchase.findUnique({ where })
 		let created = false
 		if (!purchase) {
 			if (snapshot.amountCents > this.config.maxChargeCents) {
-				throw new HttpError(422, 'Valor acima do limite de cobrança da conta Sandbox.')
+				throw new HttpError(422, 'Valor acima do limite de cobrança da conta Asaas.')
 			}
 			if (input.method !== 'credit_card' && !input.payerCpf && !(await this.customer(userId))?.providerCustomerId) {
 				throw new HttpError(400, 'Informe o CPF do pagador para a primeira compra com Pix ou boleto.')
@@ -113,7 +134,7 @@ export class BillingService {
 			try {
 				const { planCode, cycle, seats, method } = input
 				purchase = await this.db.billingPurchase.create({
-					data: { userId, ...asaasScope, idempotencyKey: key, planCode, cycle, seats, method, ...snapshot },
+					data: { userId, ...this.scope, idempotencyKey: key, planCode, cycle, seats, method, ...snapshot },
 				})
 				created = true
 			} catch (error) {
@@ -150,8 +171,8 @@ export class BillingService {
 		let customer = await this.customer(userId)
 		if (!customer && !cpf) return null
 		customer ??= await this.db.billingCustomer.upsert({
-			where: { userId_provider_environment: { userId, ...asaasScope } },
-			create: { userId, ...asaasScope },
+			where: { userId_provider_environment: { userId, ...this.scope } },
+			create: { userId, ...this.scope },
 			update: {},
 		}).catch(async (error: unknown) => {
 			if (!isUniqueConflict(error)) throw error
@@ -264,7 +285,7 @@ export class BillingService {
 			!(purchase.status === 'review' && purchase.lastError === 'creation_requires_review')) return
 		let url: string
 		try {
-			url = checkoutUrl(id, link)
+			url = checkoutUrl(this.scope.environment, id, link)
 		} catch (error) {
 			await transition(this.db, purchase, { providerCheckoutId: id, nextSyncAt: later(recoveryDelay) })
 			throw error
@@ -343,7 +364,7 @@ export class BillingService {
 		} : {}
 		await this.db.billingWebhookEvent.createMany({
 			data: {
-				id: event.id, ...asaasScope, type: event.event, resourceId, evidence,
+				id: event.id, ...this.scope, type: event.event, resourceId, evidence,
 				processedAt: resourceId ? null : new Date(),
 			},
 			skipDuplicates: true,
@@ -354,13 +375,13 @@ export class BillingService {
 		const notice = checkoutEvidence.parse(event.evidence)
 		const checkoutId = event.resourceId!
 		let purchase = await this.db.billingPurchase.findUnique({
-			where: { provider_environment_providerCheckoutId: { ...asaasScope, providerCheckoutId: checkoutId } },
+			where: { provider_environment_providerCheckoutId: { ...this.scope, providerCheckoutId: checkoutId } },
 		})
 		if (!purchase) {
 			const reference = notice.reference
 			if (!reference) return
 			purchase = await this.db.billingPurchase.findFirst({
-				where: { id: reference, ...asaasScope, method: 'credit_card', submittedAt: { not: null } },
+				where: { id: reference, ...this.scope, method: 'credit_card', submittedAt: { not: null } },
 			})
 			if (!purchase) return
 			if (notice.amountCents !== purchase.amountCents || !notice.detachedCard) {
@@ -411,19 +432,19 @@ export class BillingService {
 	private async reconcilePayment(gateway: AsaasGateway, event: BillingWebhookEvent) {
 		const id = event.resourceId!
 		let purchase = await this.db.billingPurchase.findUnique({
-			where: { provider_environment_providerPaymentId: { ...asaasScope, providerPaymentId: id } },
+			where: { provider_environment_providerPaymentId: { ...this.scope, providerPaymentId: id } },
 		})
 		try {
 			const alreadyLinked = Boolean(purchase)
 			let payment = await gateway.getPayment(id)
 			if (!purchase && payment.checkoutSession) {
 				purchase = await this.db.billingPurchase.findUnique({
-					where: { provider_environment_providerCheckoutId: { ...asaasScope, providerCheckoutId: payment.checkoutSession } },
+					where: { provider_environment_providerCheckoutId: { ...this.scope, providerCheckoutId: payment.checkoutSession } },
 				})
 			}
 			const reference = purchaseIdSchema.safeParse(payment.externalReference)
 			if (!purchase && reference.success) {
-				purchase = await this.db.billingPurchase.findFirst({ where: { id: reference.data, ...asaasScope } })
+				purchase = await this.db.billingPurchase.findFirst({ where: { id: reference.data, ...this.scope } })
 			}
 			if (!purchase && payment.checkoutSession) throw new ReconciliationError('checkout_link_not_visible')
 			if (purchase) {
@@ -444,7 +465,7 @@ export class BillingService {
 	async runOnce() {
 		const gateway = this.gateway
 		if (!gateway) return
-		const scope = { ...asaasScope }
+		const scope = this.scope
 		const events = await this.db.billingWebhookEvent.findMany({
 			where: { ...scope, processedAt: null, nextAttemptAt: { lte: new Date() } },
 			orderBy: { nextAttemptAt: 'asc' },

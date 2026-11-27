@@ -1,6 +1,13 @@
 import { z } from 'zod'
 import { existsSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
+import { asaasEnvironments } from '../lib/billing/rules.js'
+import { proStorageBytes } from '../lib/billing/catalog.js'
+
+const asaasCredentialFields = {
+	sandbox: { apiKey: 'ASAAS_API_KEY', webhookToken: 'ASAAS_WEBHOOK_TOKEN' },
+	production: { apiKey: 'ASAAS_PRODUCTION_API_KEY', webhookToken: 'ASAAS_PRODUCTION_WEBHOOK_TOKEN' },
+} as const
 
 const emptyToUndefined = (value: unknown) =>
 	typeof value === 'string' && value.trim() === '' ? undefined : value
@@ -38,9 +45,11 @@ const envSchema = z
 		SMTP_SECURE: z.preprocess(emptyToUndefined, z.enum(['true', 'false']).optional()),
 		MAIL_FROM: z.preprocess(emptyToUndefined, z.string().trim().min(1).optional()),
 
-		BILLING_MODE: z.enum(['disabled', 'sandbox']).default('disabled'),
+		BILLING_MODE: z.enum(['disabled', ...asaasEnvironments]).default('disabled'),
 		ASAAS_API_KEY: z.string().trim().optional(),
 		ASAAS_WEBHOOK_TOKEN: z.string().trim().optional(),
+		ASAAS_PRODUCTION_API_KEY: z.string().trim().optional(),
+		ASAAS_PRODUCTION_WEBHOOK_TOKEN: z.string().trim().optional(),
 		BILLING_RETURN_ORIGIN: z.string().trim().optional(),
 		BILLING_PUBLIC_RETURN_ORIGIN: z.string().trim().optional(),
 		BILLING_MAX_CHARGE_CENTS: z.string().trim().optional(),
@@ -101,19 +110,23 @@ const envSchema = z
 					'SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_SECURE and MAIL_FROM must be set together',
 			})
 
-		if (value.BILLING_MODE === 'sandbox') {
-			if (!value.ASAAS_API_KEY) context.addIssue({
-				code: 'custom', path: ['ASAAS_API_KEY'], message: 'Required in Sandbox mode',
+		if (value.BILLING_MODE !== 'disabled') {
+			const { apiKey, webhookToken } = asaasCredentialFields[value.BILLING_MODE]
+			const selectedToken = value[webhookToken]
+			if (!value[apiKey]) context.addIssue({
+				code: 'custom', path: [apiKey], message: 'Required for the selected billing environment',
 			})
-			if (!value.ASAAS_WEBHOOK_TOKEN || value.ASAAS_WEBHOOK_TOKEN.length < 32 ||
-				value.ASAAS_WEBHOOK_TOKEN === value.ASAAS_API_KEY) context.addIssue({
-				code: 'custom', path: ['ASAAS_WEBHOOK_TOKEN'], message: 'Use a dedicated token of at least 32 characters',
+			if (!selectedToken || selectedToken.length < 32 ||
+				selectedToken === value[apiKey] ||
+				selectedToken === value[value.BILLING_MODE === 'production' ? 'ASAAS_WEBHOOK_TOKEN' : 'ASAAS_PRODUCTION_WEBHOOK_TOKEN']) context.addIssue({
+				code: 'custom', path: [webhookToken], message: 'Use a dedicated token of at least 32 characters',
 			})
 			const origin = URL.parse(value.BILLING_RETURN_ORIGIN ?? '')
+			const allowLocalReturn = value.BILLING_MODE === 'sandbox' && origin?.protocol === 'http:' && origin.hostname === 'localhost'
 			if (!origin || origin.origin !== value.BILLING_RETURN_ORIGIN ||
-				(origin.protocol !== 'https:' && !(origin.protocol === 'http:' && origin.hostname === 'localhost'))) {
+				(origin.protocol !== 'https:' && !allowLocalReturn)) {
 				context.addIssue({
-					code: 'custom', path: ['BILLING_RETURN_ORIGIN'], message: 'Use an HTTPS origin or an HTTP localhost origin',
+					code: 'custom', path: ['BILLING_RETURN_ORIGIN'], message: 'Use an HTTPS origin (HTTP localhost is allowed in Sandbox)',
 				})
 			}
 			if (value.BILLING_PUBLIC_RETURN_ORIGIN) {
@@ -127,7 +140,7 @@ const envSchema = z
 			const limit = value.BILLING_MAX_CHARGE_CENTS ?? ''
 			if (!/^\d+$/.test(limit) || !Number.isSafeInteger(Number(limit)) || Number(limit) < 1) {
 				context.addIssue({
-					code: 'custom', path: ['BILLING_MAX_CHARGE_CENTS'], message: 'Use the Sandbox account charge limit in cents',
+				code: 'custom', path: ['BILLING_MAX_CHARGE_CENTS'], message: 'Use the Asaas account charge limit in cents',
 				})
 			}
 		}
@@ -141,6 +154,11 @@ const envSchema = z
 					})
 			}
 		}
+		if (value.BILLING_MODE === 'production' && (value.STORAGE_MAX_BYTES ?? 0n) < BigInt(proStorageBytes)) {
+			context.addIssue({
+				code: 'custom', path: ['STORAGE_MAX_BYTES'], message: 'The production checkout requires capacity for the Pro storage quota (200 GiB)',
+			})
+		}
 		if (value.STORAGE_MAX_USER_TRANSFERS > value.STORAGE_MAX_TRANSFERS)
 			context.addIssue({
 				code: 'custom',
@@ -151,7 +169,9 @@ const envSchema = z
 	.transform((value) => ({
 		...value,
 		SMTP_SECURE: value.SMTP_SECURE === undefined ? undefined : value.SMTP_SECURE === 'true',
-		BILLING_MAX_CHARGE_CENTS: value.BILLING_MODE === 'sandbox' ? Number(value.BILLING_MAX_CHARGE_CENTS) : undefined,
+		BILLING_MAX_CHARGE_CENTS: value.BILLING_MODE !== 'disabled' ? Number(value.BILLING_MAX_CHARGE_CENTS) : undefined,
+		BILLING_ASAAS_API_KEY: value.BILLING_MODE !== 'disabled' ? value[asaasCredentialFields[value.BILLING_MODE].apiKey] : undefined,
+		BILLING_ASAAS_WEBHOOK_TOKEN: value.BILLING_MODE !== 'disabled' ? value[asaasCredentialFields[value.BILLING_MODE].webhookToken] : undefined,
 		STORAGE_ROOT: value.STORAGE_ROOT ?? resolve(process.cwd(), '.data'),
 		STORAGE_MAX_BYTES: value.STORAGE_MAX_BYTES ?? 10737418240n,
 	}))

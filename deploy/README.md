@@ -50,6 +50,17 @@ Com dados sintéticos em PostgreSQL 16 e um volume local, a API foi parada antes
 
 Deploy não integra automaticamente as telas de arquivos do web: várias ainda usam dados simulados e o helper multipart não corresponde ao upload binário da API. O pipeline valida a publicação do frontend e sua configuração de autenticação.
 
+## Checkout real do Asaas
+
+As releases do frontend e da API precisam oferecer o modo de produção antes de ativá-lo. A oferta real é o Pro avulso, mensal ou anual. Team e Business continuam com checkout apenas no Sandbox enquanto a concessão de benefícios para equipes estiver pendente.
+
+1. Confira o volume de arquivos e o orçamento global de armazenamento da Oracle. O Pro concede 200 GiB por conta e o teto padrão do deploy é de 10 GiB. Provisione a capacidade física e defina `STORAGE_MAX_BYTES` com o orçamento real da instância.
+2. No painel Asaas de produção, configure uma chave de API e um webhook v3 com autenticação por token dedicado. Use `https://api.silverbox.perlin.com.br/webhooks/asaas` e habilite os eventos de checkout, pagamento, vencimento, reversão e estorno que a API processa. [Eventos de checkout](https://docs.asaas.com/docs/eventos-para-checkout) · [Eventos de cobrança](https://docs.asaas.com/docs/webhook-para-cobrancas)
+3. No `.env` privado da API, defina `ASAAS_PRODUCTION_API_KEY`, `ASAAS_PRODUCTION_WEBHOOK_TOKEN`, `BILLING_RETURN_ORIGIN=https://silverbox.perlin.com.br` e o limite por cobrança em centavos em `BILLING_MAX_CHARGE_CENTS`. Use aspas simples na chave para preservar o `$` inicial. Deixe `BILLING_PUBLIC_RETURN_ORIGIN` vazio para retornar diretamente à página de planos.
+4. Com os dois componentes publicados e o webhook configurado, defina `BILLING_MODE=production` e reaplique a release da API. Confira `GET /health/ready` e `GET /plans`. O catálogo deve mostrar `billingMode: production` e somente o Pro com `checkoutEnabled: true`.
+
+Acompanhe a jornada de cartão no checkout hospedado e o recebimento do webhook antes de divulgar a oferta. O retorno do navegador abre a compra. A confirmação financeira e a concessão da cota dependem da conciliação com o Asaas. [Link e retorno do checkout](https://docs.asaas.com/docs/link-do-checkout-e-redirecionamento-do-cliente)
+
 ## Login com Google
 
 1. No Google Auth Platform, crie ou selecione um cliente OAuth do tipo **Aplicativo da Web** para o ambiente. Em **URIs de redirecionamento autorizados**, cadastre `https://API_HOST/api/auth/callback/google` com o domínio exato da API. Em homologação, confira o acesso da conta de teste em **Público-alvo**. Use um projeto OAuth separado para produção. [Google Auth Platform](https://console.cloud.google.com/auth/clients) · [Política de OAuth do Google](https://developers.google.com/identity/verification/authentication-policy-compliance)
